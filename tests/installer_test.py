@@ -34,8 +34,7 @@ def main():
             args.append('-Restore')
         # pwsh runners export a module path that is incompatible with Windows
         # PowerShell 5.1. Let the child initialize its own built-in module paths.
-        environment = os.environ.copy()
-        environment.pop('PSModulePath', None)
+        environment = {key: value for key, value in os.environ.items() if key.upper() != 'PSMODULEPATH'}
         r = subprocess.run(args, capture_output=True, env=environment)
         commands.append({'restore': restore, 'exit': r.returncode, 'stdout': r.stdout.decode('utf-8', errors='replace'), 'stderr': r.stderr.decode('utf-8', errors='replace')})
         assert (r.returncode == 0) == (expected == 0), commands[-1]
