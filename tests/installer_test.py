@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import struct
+import os
 from support import ARCH, TARGETS, DIST, EVIDENCE, NPP_DIR, RUNTIME
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,11 @@ def main():
         args = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(package/'install.ps1'), '-NotepadDir', str(npp)]
         if restore:
             args.append('-Restore')
-        r = subprocess.run(args, capture_output=True)
+        # pwsh runners export a module path that is incompatible with Windows
+        # PowerShell 5.1. Let the child initialize its own built-in module paths.
+        environment = os.environ.copy()
+        environment.pop('PSModulePath', None)
+        r = subprocess.run(args, capture_output=True, env=environment)
         commands.append({'restore': restore, 'exit': r.returncode, 'stdout': r.stdout.decode('utf-8', errors='replace'), 'stderr': r.stderr.decode('utf-8', errors='replace')})
         assert (r.returncode == 0) == (expected == 0), commands[-1]
     run()
