@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Make the default README English and add a linked Simplified Chinese README.
+- Include both README languages in manual installation and source packages.
+
 ## 0.3.1 — Prepared for release
 
 - Add Windows DLL version information, generated from the single `VERSION` file.

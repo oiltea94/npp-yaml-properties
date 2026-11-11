@@ -14,7 +14,7 @@ def main():
         raise RuntimeError('DLL differs from the verified build manifest.')
     version = manifest['version']
     source = DIST/f'YamlProperties-{version}-source.zip'
-    standalone = ['.gitignore', '.gitattributes', 'VERSION', 'CHANGELOG.md', 'LICENSE', 'README.md', 'SPEC.md', 'THIRD_PARTY.md',
+    standalone = ['.gitignore', '.gitattributes', 'VERSION', 'CHANGELOG.md', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SPEC.md', 'THIRD_PARTY.md',
                   'bootstrap.py', 'build.ps1', 'build.py', 'install.ps1', 'package_release.py']
     files = [ROOT/name for name in standalone]
     for name in ['src', 'tests', 'vendor', 'docs', 'scripts', '.github']:
@@ -34,7 +34,7 @@ def main():
     with zipfile.ZipFile(binary, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         archive.write(dll, manifest['file'])
         archive.write(DIST/'manifest.json', 'manifest.json')
-        for name in ['README.md', 'CHANGELOG.md', 'install.ps1', 'LICENSE', 'THIRD_PARTY.md']:
+        for name in ['README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'install.ps1', 'LICENSE', 'THIRD_PARTY.md']:
             archive.write(ROOT/name, name)
         for file in sorted((ROOT/'docs').glob('*.md')):
             archive.write(file, file.relative_to(ROOT))
