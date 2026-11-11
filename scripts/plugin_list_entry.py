@@ -55,7 +55,7 @@ def build_entry(repository, author, minimum_npp, manifest, archive):
         'id': hashlib.sha256(data).hexdigest(),
         'repository': f'{homepage}/releases/download/v{version}/{archive.name}',
         'description': 'Convert YAML and Java Properties in either direction. Supports selections, '
-                       'automatic format detection, literal keys and configurable new-tab or in-place output.',
+                       'automatic format detection, optional key sorting and configurable new-tab or in-place output.',
         'author': author.strip(),
         'homepage': homepage,
     }

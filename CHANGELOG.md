@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 — 2026-11-11
+
 - Add an optional, persistent sort-keys menu toggle, off by default. Sort sibling mapping keys in both conversion directions while preserving array element order and quote handling.
 - Preserve double-quoted YAML values when converting to Properties, including escape spellings and aliases; normalize multiline quoted values to a quoted single line.
 - Remove the preserve-full-keys option and `--literal` flag; always expand dotted paths and array indices while retaining complete logger names beneath `logging.level`.
@@ -9,7 +11,6 @@
 - Add x86 (32-Bit) and ARM64 (64-Bit ARM) builds alongside x64, with separate packages and plugin-list metadata.
 - Check the plugin architecture against Notepad++ before installation.
 - Run core, Java compatibility, editor, installer and release checks for all three architectures in CI.
-
 - Preserve complete logger names beneath `logging.level` when converting Properties to YAML, so package and class log levels coexist without a path conflict.
 
 ## 0.3.1 — 2026-11-11

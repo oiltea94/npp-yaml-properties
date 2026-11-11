@@ -71,18 +71,20 @@ python tests\release_test.py
 
 | 文件 | 用途 |
 |---|---|
-| `YamlProperties-0.3.1-x64.zip` | 手动安装包，含 `YamlProperties/YamlProperties.dll`、安装脚本和源码压缩包 |
-| `YamlProperties-0.3.1-x64-plugin-admin.zip` | **官方目录下载目标**，根目录直接包含 `YamlProperties.dll` |
-| `YamlProperties-0.3.1-source.zip` | 对应源码、依赖、文档和构建脚本，不含本机日志 |
+| `YamlProperties-0.4.0-x64.zip` | 手动安装包，含 `YamlProperties/YamlProperties.dll`、安装脚本和源码压缩包 |
+| `YamlProperties-0.4.0-x64-plugin-admin.zip` | **官方目录下载目标**，根目录直接包含 `YamlProperties.dll` |
+| `YamlProperties-0.4.0-source.zip` | 对应源码、依赖、文档和构建脚本，不含本机日志 |
 | `checksums.json` | 上述各 ZIP 与 DLL 的 SHA-256；官方条目使用 plugin-admin ZIP 的值 |
 
-在 GitHub 创建正式 Release，tag 为 `v0.3.1`，选中经过验证的提交，并上传上述三个 ZIP 和 `checksums.json`。不要把 GitHub 自动生成的 “Source code (zip)” 当作插件安装包，也不要将 Actions 下载附件的外层 ZIP 当作 Plugins Admin ZIP。Release 说明可取自 `CHANGELOG.md`，附各架构、功能和实测宿主版本。各架构的正式附件分别上传，不覆盖已发布的旧版本。
+在 GitHub 创建正式 Release，tag 为 `v0.4.0`，选中经过验证的提交，并上传上述 ZIP 和校验文件。不要把 GitHub 自动生成的 “Source code (zip)” 当作插件安装包，也不要将 Actions 下载附件的外层 ZIP 当作 Plugins Admin ZIP。Release 说明可取自 `CHANGELOG.md`，附各架构、功能和实测宿主版本。各架构的正式附件分别上传，不覆盖已发布的旧版本。
 
 后续版本只改 `VERSION` 并更新变更记录，构建时同步生成关于窗口、Windows DLL 版本信息和 manifest。每次生成新版本下载 URL；已公开并提交目录的版本附件保持不变。重建的 ZIP 可能因时间戳而改变哈希，**先确定最终附件，再计算并提交条目**。
 
 对 x86 / ARM64，先设置 `$env:YP_ARCH = 'x86'` 或 `'arm64'`，构建、测试、打包命令会选择对应架构。也可对构建使用 `-Architecture`、对打包及条目生成器使用 `--arch`。
 
 x64 输出保留在 `dist/`；另外两种架构分别输出到 `dist/x86/`、`dist/arm64/`，包名中的 `x64` 换成 `x86` / `arm64`。每个架构拥有自己的 manifest 与 checksums；发布时保留各架构校验文件，避免相互覆盖。源码 ZIP 内容共用。发布前为新版本更新 `VERSION`，不要上传当前开发构建覆盖既有版本。
+
+正式发布使用对应标签 CI 的候选附件。校验文件分别命名为 `checksums-x86.json`、`checksums-x64.json` 和 `checksums-arm64.json`。三个源码 ZIP 的内容须逐文件一致；若 ZIP 时间戳导致哈希不同，选用 x64 的源码 ZIP 作为公共附件，并将三个公开校验文件中的源码项统一为该附件的实际哈希。安装包与 Plugins Admin ZIP 保持 CI 原始字节，安装包内嵌源码 ZIP 也不重打包。
 
 ## 4. 官方插件目录的硬性要求
 
@@ -92,7 +94,7 @@ x64 输出保留在 `dist/`；另外两种架构分别输出到 `dist/x86/`、`d
 - `folder-name` 必须唯一，并与 DLL 去掉扩展名后的名称一致：本项目为 `YamlProperties`。
 - ZIP 根目录必须是 `YamlProperties.dll`，不能再包一层 `YamlProperties/`。
 - `id` 是**整个 ZIP 的 SHA-256**，不是 DLL 的 SHA-256。
-- `version` 应与 DLL 的 Windows 版本资源一致。`0.3.1` 对应固定版本字段 `0.3.1.0`，末尾零在数值比较时等价。
+- `version` 应与 DLL 的 Windows 版本资源一致。`0.4.0` 对应固定版本字段 `0.4.0.0`，末尾零在数值比较时等价。
 - `repository` 是可公开直接下载的 ZIP URL；`homepage` 才是项目主页。
 - 填写真实作者署名和英文功能简介。
 - 用 `npp-compatible-versions` 声明实测兼容边界。当前本机宿主文件版本为 `8.9.6.4`，未完成更早版本矩阵测试；不要默认宣称支持所有 Notepad++ 版本。
