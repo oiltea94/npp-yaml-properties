@@ -74,8 +74,9 @@ The output option uses a Chinese menu label:
 | Menu option | Behavior |
 |---|---|
 | 在新标签页打开转换结果 (open results in a new tab) | Enabled by default. Disable it to replace text in place; press **Ctrl+Z** to undo the converted text in one step. |
+| 转换时按键名排序 (sort keys during conversion) | Disabled by default. Enable case-sensitive ascending key order within each mapping, in either direction. Array element order and quote handling stay unchanged. |
 
-The output preference persists across restarts. Automatic detection prioritizes the file extension; use an explicit conversion command when the format is ambiguous.
+Both preferences persist across restarts. Sorting runs only when converting; it does not run while editing or saving. Keys use Unicode character order, not pinyin or natural-number order (`key10` comes before `key2`); array indices retain numeric order. Automatic detection prioritizes the file extension; use an explicit conversion command when the format is ambiguous.
 
 ## Documentation and contributing
 

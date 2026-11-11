@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -277,7 +278,19 @@ void insert(Tree& root, const Property& property, std::size_t& nodes) {
 }
 // Keep source quote characters as syntax. yaml-cpp's string emitter adds
 // protective quotes automatically, so write the block layout directly.
-void emit_source_tree(std::string& out, const Tree& tree, std::size_t indent = 0, bool inline_first = false) {
+template <typename KeyAt>
+std::vector<std::size_t> key_order(std::size_t size, bool sorted, KeyAt key_at) {
+    std::vector<std::size_t> order(size);
+    std::iota(order.begin(), order.end(), 0);
+    if (sorted) {
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+            return key_at(a) < key_at(b);
+        });
+    }
+    return order;
+}
+void emit_source_tree(std::string& out, const Tree& tree, bool sort_keys,
+                      std::size_t indent = 0, bool inline_first = false) {
     auto prefix = [&] {
         if (!inline_first) out.append(indent, ' ');
         inline_first = false;
@@ -286,13 +299,15 @@ void emit_source_tree(std::string& out, const Tree& tree, std::size_t indent = 0
         if (node.kind == Tree::Kind::Scalar) out += " " + node.value + "\n";
         else {
             out += '\n';
-            emit_source_tree(out, node, indent + 2);
+            emit_source_tree(out, node, sort_keys, indent + 2);
         }
     };
     switch (tree.kind) {
     case Tree::Kind::Map:
         if (tree.entries.empty()) { prefix(); out += "{}\n"; }
-        for (const auto& entry : tree.entries) {
+        for (auto index : key_order(tree.entries.size(), sort_keys,
+                                   [&](std::size_t i) -> const std::string& { return tree.entries[i].first; })) {
+            const auto& entry = tree.entries[index];
             prefix();
             out += entry.first + ":";
             child(*entry.second);
@@ -307,7 +322,7 @@ void emit_source_tree(std::string& out, const Tree& tree, std::size_t indent = 0
             out += '-';
             if (item.second->kind == Tree::Kind::Map || item.second->kind == Tree::Kind::Sequence) {
                 out += ' ';
-                emit_source_tree(out, *item.second, indent + 2, true);
+                emit_source_tree(out, *item.second, sort_keys, indent + 2, true);
             } else child(*item.second);
             if (out.size() > max_output) fail("Output exceeds 16 MiB.");
         }
@@ -375,8 +390,9 @@ std::string property_scalar(const YAML::Node& node, std::string_view source) {
     fail("Could not locate quoted YAML value.", line_of(node));
 }
 struct Flattener {
-    explicit Flattener(std::string_view input) : source(input) {}
+    Flattener(std::string_view input, bool sorted) : source(input), sort_keys(sorted) {}
     std::string_view source;
+    bool sort_keys;
     std::string output;
     std::set<std::string> keys;
     std::vector<YAML::Node> ancestors;
@@ -399,6 +415,8 @@ struct Flattener {
         ancestors.push_back(node);
         if (node.IsMap()) {
             std::set<std::string> local_keys;
+            std::vector<std::pair<std::string, YAML::Node>> entries;
+            entries.reserve(node.size());
             for (const auto& item : node) {
                 if (!item.first.IsScalar()) fail("YAML mapping keys must be scalar strings.", line_of(item.first));
                 check_tag(item.first);
@@ -408,7 +426,14 @@ struct Flattener {
                     fail("Merge keys must be expanded before conversion.", line_of(item.first));
                 if (key.empty())
                     fail("Empty YAML key has no hierarchical path.", line_of(item.first));
-                visit(item.second, depth ? path + "." + key : key, depth+1);
+                entries.emplace_back(key, item.second);
+            }
+            // Sort indices, never YAML::Node objects: assigning nodes can change
+            // the shared graph and corrupt values reached through aliases.
+            for (auto index : key_order(entries.size(), sort_keys,
+                                       [&](std::size_t i) -> const std::string& { return entries[i].first; })) {
+                const auto& entry = entries[index];
+                visit(entry.second, depth ? path + "." + entry.first : entry.first, depth+1);
             }
         } else if (node.IsSequence()) {
             if (node.size() > max_index+1) fail("Array index exceeds 9999.", line_of(node));
@@ -444,34 +469,34 @@ Format detect_format(std::string_view input) {
 }
 }
 
-std::string to_yaml(std::string_view input) {
+std::string to_yaml(std::string_view input, bool sort_keys) {
     input = validated(input);
     Tree root;
     root.kind = Tree::Kind::Map;
     std::size_t nodes = 1;
     for (const auto& property : parse_properties(input)) insert(root, property, nodes);
     std::string output;
-    emit_source_tree(output, root);
+    emit_source_tree(output, root, sort_keys);
     return output;
 }
-std::string to_properties(std::string_view input) {
+std::string to_properties(std::string_view input, bool sort_keys) {
     input = validated(input);
     try {
         auto docs = YAML::LoadAll(std::string(input));
         if (docs.empty()) return {};
         if (docs.size() != 1) fail("Expected a single YAML document.");
         if (!docs.front().IsMap()) fail("YAML root must be a mapping.", line_of(docs.front()));
-        Flattener flattener(input);
+        Flattener flattener(input, sort_keys);
         flattener.visit(docs.front(), {}, 0);
         return flattener.output;
     } catch (const YAML::Exception& error) {
         fail("YAML parse error: " + error.msg, error.mark.is_null() ? 0 : static_cast<std::size_t>(error.mark.line+1));
     }
 }
-ConversionResult auto_convert(std::string_view input, std::optional<Format> source_hint) {
+ConversionResult auto_convert(std::string_view input, std::optional<Format> source_hint, bool sort_keys) {
     input = validated(input);
     auto source = source_hint ? *source_hint : detect_format(input);
-    if (source == Format::Yaml) return {Format::Properties, to_properties(input)};
-    return {Format::Yaml, to_yaml(input)};
+    if (source == Format::Yaml) return {Format::Properties, to_properties(input, sort_keys)};
+    return {Format::Yaml, to_yaml(input, sort_keys)};
 }
 }

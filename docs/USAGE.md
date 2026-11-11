@@ -167,12 +167,36 @@ text="line\\nnext"
 
 转换仅在本机内存中处理，插件没有联网功能。
 
+## 可选自动排序
+
+勾选 **插件 → YamlProperties → 转换时按键名排序** 即可开启，默认关闭，重启后记忆设置。
+
+- 在手动或自动转换时生效，YAML → Properties、Properties → YAML 均适用；编辑和保存时不触发。
+- 对每层映射的键分别升序排列，保留层级分组；不是对最终 Properties 全文按行排序。
+- 区分大小写，按 Unicode 字符顺序比较，不按拼音；普通键名中 `key10` 排在 `key2` 前面。
+- 数组元素位置不变，下标维持 `[0]`、`[1]`、`[2]`…的数值顺序。数组中对象的成员键可以排序。
+- 值、引号和转义沿用现有转换规则。关闭后恢复原来的键顺序处理。
+
+例如开启后，`server.port=8080`、`spring.profiles.active="${profileActive}"`、`server.address=localhost` 输出为：
+
+```yaml
+server:
+  address: localhost
+  port: 8080
+spring:
+  profiles:
+    active: "${profileActive}"
+```
+
+该设置适用于插件；命令行保持默认不排序。
+
 ## 配置保存
 
-输出位置开关保存在 Notepad++ 插件配置目录的 `YamlProperties.ini`：
+输出位置和排序开关保存在 Notepad++ 插件配置目录的 `YamlProperties.ini`：
 
 | 配置项 | 默认值 | 含义 |
 |---|---|---|
 | `NewTab` | `1` | `1` 新标签页输出；`0` 原位替换 |
+| `SortKeys` | `0` | `1` 转换时按每层键名升序排序；`0` 保持原有键顺序处理 |
 
-旧配置缺少 `NewTab` 时默认开启。旧版引号和完整键名设置不再读取，保存输出位置时会移除。设置采用原子保存；保存失败时，当前选项保持不变。
+旧配置缺少 `NewTab` 时默认开启，缺少 `SortKeys` 时默认关闭。旧版引号和完整键名设置不再读取，保存设置时会移除。两个开关同时原子保存；保存失败时，当前选项和菜单勾选状态保持不变。

@@ -152,6 +152,9 @@ def main():
         assert output_toggle is not None, 'Missing configurable output menu'
         assert u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
         passed('old configuration defaults to checked new-tab output')
+        sort_toggle = commands.get('转换时按键名排序')
+        assert sort_toggle is not None and not u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
+        passed('sorting defaults to off for existing configuration')
         assert '键和值始终加双引号' not in commands
         assert '保留完整键名（不拆分点号和下标）' not in commands
         passed('removed menus are absent even with legacy enabled settings')
@@ -223,6 +226,28 @@ def main():
             send(hwnd, 0x111, commands['Properties → YAML'])
             assert read(sci) == quoted_yaml, repr(read(sci))
         passed('manual and auto YAML conversion preserve double quotes and escapes through a round trip', output=read(sci))
+        unsorted_properties = 'z="00123"\nitems[0].z="first"\nitems[0].a=off\nitems[1].z="second"\nitems[1].a=true\na="${profileActive}"\n'
+        unsorted_yaml = 'z: "00123"\nitems:\n  - z: "first"\n    a: off\n  - z: "second"\n    a: true\na: "${profileActive}"\n'
+        sorted_properties = 'a="${profileActive}"\nitems[0].a=off\nitems[0].z="first"\nitems[1].a=true\nitems[1].z="second"\nz="00123"\n'
+        sorted_yaml = 'a: "${profileActive}"\nitems:\n  - a: off\n    z: "first"\n  - a: true\n    z: "second"\nz: "00123"\n'
+        send(hwnd, 0x111, sort_toggle)
+        assert u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
+        assert config.read_text() == '[Settings]\nNewTab=1\nSortKeys=1\n'
+        for command in ['Properties → YAML', '自动识别并转换']:
+            open_fixture('sort.properties', unsorted_properties)
+            send(hwnd, 0x111, commands[command])
+            assert read(sci) == sorted_yaml, repr(read(sci))
+        for command in ['YAML → Properties', '自动识别并转换']:
+            open_fixture('sort.yaml', unsorted_yaml)
+            send(hwnd, 0x111, commands[command])
+            assert read(sci) == sorted_properties, repr(read(sci))
+        passed('sorting applies to both directions and auto while retaining array order and quotes', output=read(sci))
+        send(hwnd, 0x111, sort_toggle)
+        open_fixture('sort-off.properties', unsorted_properties)
+        send(hwnd, 0x111, commands['Properties → YAML'])
+        assert read(sci) == unsorted_yaml
+        assert config.read_text() == '[Settings]\nNewTab=1\nSortKeys=0\n'
+        passed('disabling sorting restores source key order')
         open_fixture('unknown.txt', logger_yaml)
         send(hwnd, 0x111, commands['自动识别并转换'])
         assert read(sci) == logger_properties
@@ -250,7 +275,7 @@ def main():
 
         # Saving the remaining output preference drops obsolete settings.
         send(hwnd, 0x111, output_toggle)
-        assert config.read_text() == '[Settings]\nNewTab=0\n'
+        assert config.read_text() == '[Settings]\nNewTab=0\nSortKeys=0\n'
         assert not u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
         passed('output preference persists and removes both obsolete settings')
 
@@ -359,11 +384,16 @@ def main():
             assert config.read_bytes() == saved_config
             assert not u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
             passed('failed preference save preserves configuration and menu state')
+            expect_error(sort_toggle, 'Could not save settings')
+            assert config.read_bytes() == saved_config
+            assert not u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
+            passed('failed sorting save preserves configuration and menu state')
         finally:
             blocked_temp.rmdir()
 
-        assert config.read_text() == '[Settings]\nNewTab=0\n'
-        # Restart the isolated editor to verify loading the remaining setting from disk.
+        send(hwnd, 0x111, sort_toggle)
+        assert config.read_text() == '[Settings]\nNewTab=0\nSortKeys=1\n'
+        # Restart the isolated editor to verify both independent settings from disk.
         k.CloseHandle(handle)
         handle = None
         process.terminate()
@@ -377,22 +407,30 @@ def main():
             raise C.WinError(C.get_last_error())
         sci = until(lambda: next((h for h in windows(process.pid, hwnd) if classname(h) == 'Scintilla' and read(h) == initial), None))
         output_toggle = commands['在新标签页打开转换结果']
+        sort_toggle = commands['转换时按键名排序']
+        assert u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
         assert '保留完整键名（不拆分点号和下标）' not in commands
         assert '键和值始终加双引号' not in commands
         assert not u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
-        open_fixture('restart.properties', 'a.b=1\n')
+        open_fixture('restart.properties', 'z.b=2\na.b=1\n')
         buffer, tabs = send(hwnd, 2024+60), send(hwnd, 2024+7)
-        send(hwnd, 0x111, commands['Properties → YAML'])
-        assert read(sci) == 'a:\n  b: 1\n'
+        send(hwnd, 0x111, commands['自动识别并转换'])
+        assert read(sci) == 'a:\n  b: 1\nz:\n  b: 2\n'
         assert send(hwnd, 2024+60) == buffer and send(hwnd, 2024+7) == tabs
-        passed('output preference and fixed hierarchical conversion survive editor restart')
+        send(sci, 2176)
+        assert read(sci) == 'z.b=2\na.b=1\n'
+        send(sci, 2011)
+        assert read(sci) == 'a:\n  b: 1\nz:\n  b: 2\n'
+        passed('sorting and output preferences survive restart with in-place auto conversion and undo')
         send(hwnd, 0x111, output_toggle)
-        assert config.read_text() == '[Settings]\nNewTab=1\n'
-        open_fixture('restart.properties', 'a.b=1\n')
+        assert config.read_text() == '[Settings]\nNewTab=1\nSortKeys=1\n'
+        open_fixture('restart.properties', 'z.b=2\na.b=1\n')
         # The open tab contains unsaved YAML from the previous conversion.
         send(hwnd, 0x111, commands['YAML → Properties'])
-        assert read(sci) == 'a.b=1\n' and send(hwnd, 2024+7) == tabs+1
+        assert read(sci) == 'a.b=1\nz.b=2\n' and send(hwnd, 2024+7) == tabs+1
         passed('reenabling new-tab output takes effect with hierarchical keys')
+        send(hwnd, 0x111, sort_toggle)
+        assert config.read_text() == '[Settings]\nNewTab=1\nSortKeys=0\n'
     finally:
         if handle:
             k.CloseHandle(handle)

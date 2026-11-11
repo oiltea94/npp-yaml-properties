@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add an optional, persistent sort-keys menu toggle, off by default. Sort sibling mapping keys in both conversion directions while preserving array element order and quote handling.
 - Preserve double-quoted YAML values when converting to Properties, including escape spellings and aliases; normalize multiline quoted values to a quoted single line.
 - Remove the preserve-full-keys option and `--literal` flag; always expand dotted paths and array indices while retaining complete logger names beneath `logging.level`.
 - Preserve existing Properties quotes as YAML syntax, without adding quotes to unquoted keys or values, including numbers and booleans.

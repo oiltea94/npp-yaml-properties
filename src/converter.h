@@ -12,7 +12,8 @@ class ConversionError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
-std::string to_properties(std::string_view input);
-std::string to_yaml(std::string_view input);
-ConversionResult auto_convert(std::string_view input, std::optional<Format> source_hint = std::nullopt);
+std::string to_properties(std::string_view input, bool sort_keys = false);
+std::string to_yaml(std::string_view input, bool sort_keys = false);
+ConversionResult auto_convert(std::string_view input, std::optional<Format> source_hint = std::nullopt,
+                              bool sort_keys = false);
 }

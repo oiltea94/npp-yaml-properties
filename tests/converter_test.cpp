@@ -19,6 +19,58 @@ static void rejects(const std::function<void()>& f, const std::string& fragment)
 }
 int main() {
     std::vector<std::pair<std::string, std::function<void()>>> tests = {
+        {"sorting is opt-in and orders sibling keys in both directions", [] {
+            const std::string props = "server.port=8080\nspring.profiles.active=\"${profileActive}\"\nserver.address=localhost\n";
+            const std::string yaml = "server:\n  port: 8080\n  address: localhost\nspring:\n  profiles:\n    active: \"${profileActive}\"\n";
+            const std::string sorted_yaml = "server:\n  address: localhost\n  port: 8080\nspring:\n  profiles:\n    active: \"${profileActive}\"\n";
+            const std::string sorted_props = "server.address=localhost\nserver.port=8080\nspring.profiles.active=\"${profileActive}\"\n";
+            check(to_yaml(props) == yaml && to_yaml(props, false) == yaml, "default preserves insertion order");
+            check(to_properties(yaml) == "server.port=8080\nserver.address=localhost\nspring.profiles.active=\"${profileActive}\"\n", "default flatten order");
+            check(to_yaml(props, true) == sorted_yaml, "sort YAML sibling keys");
+            check(to_properties(yaml, true) == sorted_props, "sort Properties sibling keys");
+            check(yp::auto_convert(props, std::nullopt, true).text == sorted_yaml, "auto Properties sorting");
+            check(yp::auto_convert(yaml, yp::Format::Yaml, true).text == sorted_props, "auto YAML sorting");
+        }},
+        {"sorting preserves sequence positions and sorts object members", [] {
+            std::string yaml = "items:\n";
+            std::string expected;
+            for (int i = 0; i < 12; ++i) {
+                yaml += "  - z: \"" + std::to_string(12-i) + "\"\n    a: off\n";
+                expected += "items[" + std::to_string(i) + "].a=off\nitems[" + std::to_string(i) + "].z=\"" + std::to_string(12-i) + "\"\n";
+            }
+            check(to_properties(yaml, true) == expected, "numeric array indices, unchanged element values");
+            auto output = YAML::Load(to_yaml(expected, true));
+            for (int i = 0; i < 12; ++i) {
+                check(output["items"][i].begin()->first.Scalar() == "a", "object member order");
+                check(output["items"][i]["z"].Scalar() == std::to_string(12-i), "element order");
+            }
+        }},
+        {"sorting compares decoded keys with case-sensitive Unicode ordering", [] {
+            const std::string props = "中=x\na=x\nZ=x\nA=x\na2=x\na10=x\n\\u0062=x\n";
+            const std::string expected = "A: x\nZ: x\na: x\na10: x\na2: x\nb: x\n中: x\n";
+            check(to_yaml(props, true) == expected, "lexical ordering without locale or natural-number sorting");
+            check(to_properties("中: x\n' a': x\na: x\nZ: x\nA: x\n", true) ==
+                  "\\ a=x\nA=x\nZ=x\na=x\n中=x\n", "compare decoded keys before Properties escaping");
+        }},
+        {"sorting preserves logger names quotes and escape spellings", [] {
+            const std::string props = "logging.level.org.example=off\nlogging.level.com.example.Mapper=\"debug\"\nlogging.level.com.example=info\n";
+            const std::string expected = "logging:\n  level:\n    com.example: info\n    com.example.Mapper: \"debug\"\n    org.example: off\n";
+            check(to_yaml(props, true) == expected, "logger names stay complete");
+            const std::string yaml = "z: \"line\\nnext\"\na: \"00123\"\n";
+            check(to_yaml(to_properties(yaml, true), true) == "a: \"00123\"\nz: \"line\\nnext\"\n", "quotes survive sorting round trip");
+        }},
+        {"sorting alias mappings does not mutate YAML nodes", [] {
+            const std::string yaml = "z: &base {z: \"two\", a: one}\na: *base\n";
+            check(to_properties(yaml, true) == "a.a=one\na.z=\"two\"\nz.a=one\nz.z=\"two\"\n", "aliases expanded in sorted order");
+            rejects([] { to_properties("z: &z {a: *z}\n", true); }, "Recursive");
+            rejects([] { to_properties("a: 1\na: 2\n", true); }, "Duplicate");
+            rejects([] { to_properties("a.b: x\na: {b: y}\n", true); }, "Duplicate flattened");
+        }},
+        {"sorting remains per mapping rather than globally sorting flattened paths", [] {
+            check(to_properties("a!: last\na: {z: first}\n", true) == "a.z=first\na\\!=last\n", "keep hierarchy groups together");
+            check(to_yaml("a!=last\na.z=first\n", true) == "a:\n  z: first\na!: last\n", "same grouping both ways");
+            check(to_properties("{}", true).empty() && to_yaml("", true) == "{}\n", "empty root");
+        }},
         {"YAML double quoted values retain quotes in manual and auto conversion", [] {
             const std::string yaml = "name: \"demo\"\ncode: \"00123\"\nprofile: \"${profileActive}\"\nempty: \"\"\nplain: demo\n";
             const std::string props = "name=\"demo\"\ncode=\"00123\"\nprofile=\"${profileActive}\"\nempty=\"\"\nplain=demo\n";
