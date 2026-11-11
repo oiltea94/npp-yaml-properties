@@ -1,4 +1,4 @@
-"""Generate one official x64 plugin-list entry from a verified local release ZIP."""
+"""Generate an architecture-specific plugin-list entry from a verified release ZIP."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -7,6 +7,10 @@ import re
 import urllib.parse
 import urllib.request
 import zipfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from build_config import TARGETS, architecture, target_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_PATTERN = r'(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){0,3}'
@@ -34,8 +38,9 @@ def build_entry(repository, author, minimum_npp, manifest, archive):
     for value in [version, minimum_npp]:
         if not re.fullmatch(VERSION_PATTERN, value) or any(int(p) > 65535 for p in value.split('.')):
             raise ValueError('Versions must have one to four numeric components, each at most 65535.')
-    if manifest['architecture'] != 'x64':
-        raise ValueError('This generator only handles the tested x64 release.')
+    arch = architecture(manifest['architecture'])
+    if archive.name != f'YamlProperties-{version}-{arch}-plugin-admin.zip':
+        raise ValueError('Archive filename does not match manifest version and architecture.')
     data = archive.read_bytes()
     with zipfile.ZipFile(archive) as z:
         if z.namelist().count('YamlProperties.dll') != 1:
@@ -72,17 +77,21 @@ def verify_download(entry):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--arch', choices=TARGETS, default=architecture())
     parser.add_argument('--repository', required=True, help='Public GitHub repository HTTPS URL')
     parser.add_argument('--author', required=True, help='Author display name')
     parser.add_argument('--min-npp', required=True, help='Lowest Notepad++ version verified for this release')
     parser.add_argument('--verify-download', action='store_true', help='Verify the published ZIP before writing JSON')
     args = parser.parse_args()
-    manifest = json.loads((ROOT/'dist/manifest.json').read_text(encoding='utf-8'))
-    archive = ROOT/'dist'/f"YamlProperties-{manifest['version']}-x64-plugin-admin.zip"
+    dist = target_dir('dist', args.arch)
+    manifest = json.loads((dist/'manifest.json').read_text(encoding='utf-8'))
+    if manifest['architecture'] != args.arch:
+        raise ValueError('Manifest architecture does not match requested target.')
+    archive = dist/f"YamlProperties-{manifest['version']}-{args.arch}-plugin-admin.zip"
     entry = build_entry(args.repository, args.author, args.min_npp, manifest, archive)
     if args.verify_download:
         verify_download(entry)
-    target = ROOT/'dist/nppPluginList-entry-x64.json'
+    target = dist/f'nppPluginList-entry-{args.arch}.json'
     temporary = target.with_suffix('.tmp')
     temporary.write_text(json.dumps(entry, ensure_ascii=False, indent=4)+'\n', encoding='utf-8')
     temporary.replace(target)

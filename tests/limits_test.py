@@ -1,9 +1,10 @@
 from pathlib import Path
 import json
 import subprocess
+from support import BUILD, EVIDENCE
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT/'build/ypconvert.exe'
+CLI = BUILD/'ypconvert.exe'
 
 def main():
     cases = [
@@ -22,7 +23,7 @@ def main():
         assert not r.stdout, (name, 'partial output on error')
         results.append({'test': name, 'result': 'PASS', 'message': r.stderr.decode('utf-8').strip()})
         print('PASS '+name)
-    (ROOT/'evidence/limits-tests.json').write_text(json.dumps(results, indent=2)+'\n', encoding='utf-8')
+    (EVIDENCE/'limits-tests.json').write_text(json.dumps(results, indent=2)+'\n', encoding='utf-8')
 
 if __name__ == '__main__':
     main()

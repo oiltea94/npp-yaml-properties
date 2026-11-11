@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml"><img src="https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml/badge.svg?branch=main" alt="Windows build and release checks"></a>
-  <img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64">
+  <img src="https://img.shields.io/badge/Windows-x86%20%7C%20x64%20%7C%20ARM64-0078D4" alt="Windows x86、x64 与 ARM64">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
 </p>
 
@@ -20,7 +20,7 @@
 - **双向转换**：YAML ↔ Properties，也可自动识别格式。
 - **按需转换**：处理选区或全文，结果可新开标签页或原位替换。
 - **支持特殊键名**：处理 `com.example`、中文、空格与转义字符。
-- **本地运行**：原生 x64 插件，转换过程无需联网。
+- **本地运行**：原生 x86、x64 和 ARM64 插件，转换过程无需联网。
 
 ## 转换示例
 
@@ -43,9 +43,15 @@ logging.level.com.example=off
 
 ## 安装
 
-需要 **Windows 和 x64 版 Notepad++**。
+支持 **32-Bit（x86）、64-Bit（x64）和 64-Bit ARM（ARM64）版 Notepad++**。插件必须匹配编辑器的架构，不能只根据 Windows 架构选择。
 
-1. 从 [Releases](https://github.com/oiltea94/npp-yaml-properties/releases) 下载名称以 **`-x64.zip`** 结尾的手动安装包。尚无发行版时，可在 [Actions](https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml) 成功运行的 **Artifacts** 中下载构建包，解压后找到该 ZIP。
+| Notepad++ 版本 | 手动安装包后缀 |
+|---|---|
+| 32-Bit | `-x86.zip` |
+| 64-Bit | `-x64.zip` |
+| 64-Bit ARM | `-arm64.zip` |
+
+1. 从 [Releases](https://github.com/oiltea94/npp-yaml-properties/releases) 下载名称以 **`-x86.zip`、`-x64.zip` 或 `-arm64.zip`** 结尾的手动安装包。对应架构尚未发布时，可在 [Actions](https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml) 成功运行的 **Artifacts** 中下载该架构的构建包，解压后找到该 ZIP。
 2. 关闭 Notepad++，解压安装包，将 `YamlProperties` 文件夹复制到 Notepad++ 的 `plugins` 目录。
 3. 重启 Notepad++，在 **插件 → YamlProperties** 中使用。
 

@@ -5,10 +5,11 @@ import base64
 import json
 import random
 import subprocess
+from support import BUILD, EVIDENCE, RUNTIME
 
 ROOT = Path(__file__).resolve().parents[1]
-WORK = ROOT / '.runtime/java'
-CLI = ROOT / 'build/ypconvert.exe'
+WORK = RUNTIME / 'java'
+CLI = BUILD / 'ypconvert.exe'
 
 def main():
     WORK.mkdir(parents=True, exist_ok=True)
@@ -57,7 +58,7 @@ def main():
         if parsed[2*i] != parsed[2*i+1]:
             errors.append({'case': i, 'input': source, 'expected': parsed[2*i], 'actual': parsed[2*i+1]})
     report = {'cases': len(cases), 'passed': len(cases)-len(errors), 'errors': errors}
-    (ROOT / 'evidence/java-compat.json').write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    (EVIDENCE / 'java-compat.json').write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     print(json.dumps(report, ensure_ascii=True, indent=2))
     if errors:
         raise SystemExit(1)

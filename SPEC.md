@@ -1,7 +1,7 @@
 # YamlProperties 0.3.1
 
 ## Objective and accepted behavior
-Native Windows x64 Notepad++ plugin with YAML → Properties, Properties → YAML and optional automatic conversion menu commands. Convert a single selection when present, otherwise the active document. By default, open the result in a new UTF-8 tab and preserve the source document. A persistent checked menu item controls this behavior; when unchecked, replace only the selected range or the whole document in place, with one undo action and no automatic save. Default dotted keys and zero-based bracket indices form nested mappings and sequences. A separate persistent menu toggle preserves complete keys instead. All emitted YAML values are quoted strings.
+Native Windows x86, x64 and ARM64 Notepad++ plugin with YAML → Properties, Properties → YAML and optional automatic conversion menu commands. Convert a single selection when present, otherwise the active document. By default, open the result in a new UTF-8 tab and preserve the source document. A persistent checked menu item controls this behavior; when unchecked, replace only the selected range or the whole document in place, with one undo action and no automatic save. Default dotted keys and zero-based bracket indices form nested mappings and sequences. A separate persistent menu toggle preserves complete keys instead. All emitted YAML values are quoted strings.
 
 ## Conversion contract
 - UTF-8 text, Unicode escapes, Java Properties separators, escaped keys and continued lines.
@@ -17,7 +17,7 @@ Native Windows x64 Notepad++ plugin with YAML → Properties, Properties → YAM
 - Maximum input 8 MiB, depth 64, 100,000 visited nodes, array index 9,999 and output 16 MiB.
 
 ## Implementation
-C++17, Win32/Notepad++ plugin API, yaml-cpp 0.8.0 (MIT). A portable LLVM-MinGW toolchain is confined to `.tools/`. No runtime dependency on Python, Java or an external converter. Static C++ runtime and yaml-cpp.
+C++17, Win32/Notepad++ plugin API, yaml-cpp 0.8.0 (MIT). Architecture-specific binaries and build directories prevent mixing target objects. A portable LLVM-MinGW toolchain is confined to `.tools/`. No runtime dependency on Python, Java or an external converter. Static C++ runtime and yaml-cpp.
 
 ## Commands
 Build and test: `powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1`
@@ -32,7 +32,7 @@ The root VERSION file is the single executable version source. Embed a Windows V
 `src/` conversion core and DLL adapter; `tests/` semantic and real Notepad++ checks; `vendor/` pinned dependency sources and SDK headers; `dist/` installable plugin; `evidence/` verification records. Use small named functions, RAII, explicit errors and `snake_case` functions. Example public call: `to_yaml(input, KeyMode::Hierarchical)`.
 
 ## Testing and acceptance
-Test conversion semantics against independently expected values, not text formatting. Cover escaping, Unicode, arrays of objects, ambiguity, invalid input and resource bounds. Build the DLL, inspect its exports/dependencies, load it into an isolated copy of installed Notepad++, and invoke menu actions with source preservation checks. Verify new-tab defaults, selection/full-document replacement, undo/redo, encoding preservation, read-only/error handling, settings-save failure and restart persistence. Round-trip tests validate values, not YAML types/comments.
+Test conversion semantics against independently expected values, not text formatting. Cover escaping, Unicode, arrays of objects, ambiguity, invalid input and resource bounds. Build each target DLL, inspect its exports/dependencies, load it into an isolated copy of installed Notepad++, and invoke menu actions with source preservation checks. Verify new-tab defaults, selection/full-document replacement, undo/redo, encoding preservation, read-only/error handling, settings-save failure and restart persistence. Round-trip tests validate values, not YAML types/comments.
 
 ## Boundaries
 Always validate before creating output. Preserve original documents by default; explicit in-place preference permits undoable editor changes. Never save source files automatically. Back up an existing plugin before installation. Ask before remote publishing. Do not overwrite unrelated files or restart a user's editor. Build/test artifacts stay inside this project directory.

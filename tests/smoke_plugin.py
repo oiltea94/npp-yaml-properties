@@ -6,9 +6,10 @@ import json
 import shutil
 import subprocess
 import time
+from support import ARCH, TARGETS, DIST, EVIDENCE, NPP_DIR, RUNTIME as TARGET_RUNTIME, pe_machine
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = ROOT / '.runtime/npp'
+RUNTIME = TARGET_RUNTIME / 'npp'
 u = C.WinDLL('user32', use_last_error=True)
 k = C.WinDLL('kernel32', use_last_error=True)
 PTR = C.c_void_p
@@ -110,13 +111,14 @@ class Remote:
 
 def main():
     RUNTIME.mkdir(parents=True, exist_ok=True)
-    source = Path(r'C:\Program Files\Notepad++')
+    source = NPP_DIR
+    assert pe_machine((source/'notepad++.exe').read_bytes()) == TARGETS[ARCH][1], 'Notepad++ architecture mismatch'
     for name in ['notepad++.exe', 'langs.model.xml', 'stylers.model.xml']:
         shutil.copy2(source / name, RUNTIME / name)
     (RUNTIME / 'doLocalConf.xml').write_text('', encoding='utf-8')
     destination = RUNTIME / 'plugins/YamlProperties'
     destination.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / 'dist/YamlProperties/YamlProperties.dll', destination / 'YamlProperties.dll')
+    shutil.copy2(DIST / 'YamlProperties/YamlProperties.dll', destination / 'YamlProperties.dll')
     config = RUNTIME / 'plugins/config/YamlProperties.ini'
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text('[Settings]\nLiteralKeys=0\n', encoding='ascii')
@@ -389,7 +391,7 @@ def main():
             k.CloseHandle(handle)
         process.terminate()
         process.wait(timeout=10)
-        (ROOT / 'evidence/plugin-smoke.json').write_text(json.dumps(results, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+        (EVIDENCE / 'plugin-smoke.json').write_text(json.dumps(results, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     print(f'{len(results)} real Notepad++ checks passed', flush=True)
 
 if __name__ == '__main__':

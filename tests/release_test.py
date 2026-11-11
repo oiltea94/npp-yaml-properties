@@ -7,6 +7,7 @@ import json
 import struct
 import unittest
 import zipfile
+from support import ARCH, TARGETS, DIST, pe_machine
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,35 +37,42 @@ def binary_version(path):
 class ReleaseTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.manifest = json.loads((ROOT/'dist/manifest.json').read_text())
+        cls.manifest = json.loads((DIST/'manifest.json').read_text())
         cls.version = cls.manifest['version']
-        cls.dll = ROOT/'dist'/cls.manifest['file']
+        cls.dll = DIST/cls.manifest['file']
 
     def test_windows_version_matches_release(self):
         expected = self.version + '.0' * (3 - self.version.count('.'))
         self.assertEqual(binary_version(self.dll), expected)
 
     def test_plugin_admin_zip_has_matching_dll_at_root(self):
-        path = ROOT/'dist'/f'YamlProperties-{self.version}-x64-plugin-admin.zip'
+        path = DIST/f'YamlProperties-{self.version}-{ARCH}-plugin-admin.zip'
         with zipfile.ZipFile(path) as z:
             self.assertIn('YamlProperties.dll', z.namelist())
             self.assertNotIn('YamlProperties/YamlProperties.dll', z.namelist())
             self.assertEqual(z.read('YamlProperties.dll'), self.dll.read_bytes())
 
-    def test_binary_is_x64_and_matches_manifest(self):
+    def test_binary_matches_target_architecture_and_manifest(self):
         data = self.dll.read_bytes()
         offset = struct.unpack_from('<I', data, 0x3c)[0]
         self.assertEqual(data[offset:offset+4], b'PE\0\0')
-        self.assertEqual(struct.unpack_from('<H', data, offset+4)[0], 0x8664)
+        self.assertEqual(pe_machine(data), TARGETS[ARCH][1])
+        self.assertEqual(self.manifest['architecture'], ARCH)
         self.assertEqual(hashlib.sha256(data).hexdigest(), self.manifest['sha256'])
 
     def test_source_archive_contains_build_inputs_without_local_artifacts(self):
-        with zipfile.ZipFile(ROOT/'dist'/f'YamlProperties-{self.version}-source.zip') as z:
+        with zipfile.ZipFile(DIST/f'YamlProperties-{self.version}-source.zip') as z:
             names = z.namelist()
-            for name in ['VERSION', 'src/plugin.rc', 'build.py', 'LICENSE', 'docs/RELEASING.md']:
+            for name in ['VERSION', 'src/plugin.rc', 'build.py', 'build_config.py', 'LICENSE', 'docs/RELEASING.md']:
                 self.assertTrue('YamlProperties/'+name in names, f'Missing required source file: {name}')
             for name in names:
                 self.assertFalse(set(Path(name).parts) & {'.git', '.tools', '.runtime', '.backups', 'evidence', '__pycache__'})
+
+    def test_manual_package_contains_matching_dll_manifest_and_installer(self):
+        with zipfile.ZipFile(DIST/f'YamlProperties-{self.version}-{ARCH}.zip') as z:
+            self.assertEqual(z.read('YamlProperties/YamlProperties.dll'), self.dll.read_bytes())
+            self.assertEqual(json.loads(z.read('manifest.json'))['architecture'], ARCH)
+            self.assertIn('install.ps1', z.namelist())
 
 
 if __name__ == '__main__':

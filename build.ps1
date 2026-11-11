@@ -1,4 +1,8 @@
-param([switch]$CoreOnly)
+param(
+    [ValidateSet('x86', 'x64', 'arm64')][string]$Architecture = $(if ($env:YP_ARCH) { $env:YP_ARCH } else { 'x64' }),
+    [switch]$CoreOnly,
+    [switch]$CompileOnly
+)
 $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
 try {
@@ -6,8 +10,9 @@ try {
     if (-not (Test-Path -LiteralPath $compiler)) {
         throw 'Build toolchain missing. Run python bootstrap.py first (downloads the pinned portable compiler).'
     }
-    $arguments = @('build.py', '--compiler', $compiler)
+    $arguments = @('build.py', '--arch', $Architecture)
     if ($CoreOnly) { $arguments += '--core-only' }
+    if ($CompileOnly) { $arguments += '--compile-only' }
     & python @arguments
     if ($LASTEXITCODE -ne 0) { throw "Build or tests failed with exit code $LASTEXITCODE" }
 } finally { Pop-Location }

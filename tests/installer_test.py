@@ -4,9 +4,11 @@ import json
 import shutil
 import subprocess
 import tempfile
+import struct
+from support import ARCH, TARGETS, DIST, EVIDENCE, NPP_DIR, RUNTIME
 
 ROOT = Path(__file__).resolve().parents[1]
-WORK = ROOT / '.runtime/installer'
+WORK = RUNTIME / 'installer'
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -19,9 +21,9 @@ def main():
     package.mkdir(parents=True, exist_ok=True)
     npp.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT/'install.ps1', package/'install.ps1')
-    shutil.copy2(r'C:\Program Files\Notepad++\notepad++.exe', npp/'notepad++.exe')
+    shutil.copy2(NPP_DIR/'notepad++.exe', npp/'notepad++.exe')
     (package/'YamlProperties').mkdir(exist_ok=True)
-    built = ROOT/'dist/YamlProperties/YamlProperties.dll'
+    built = DIST/'YamlProperties/YamlProperties.dll'
     shutil.copy2(built, package/'YamlProperties/YamlProperties.dll')
     target = npp/'plugins/YamlProperties/YamlProperties.dll'
     commands = []
@@ -49,8 +51,21 @@ def main():
     shutil.copy2(built, target)
     run(restore=True)
     assert target.read_bytes() == previous
-    (ROOT/'evidence/installer-tests.json').write_text(json.dumps({'result': 'PASS', 'checks': ['install checksum', 'fresh-install removal', 'upgrade backup', 'modified-file guard', 'byte-exact restoration'], 'commands': commands}, indent=2)+'\n', encoding='utf-8')
-    print('5/5 installer and restoration checks passed')
+    original_exe = (npp/'notepad++.exe').read_bytes()
+    for other_arch in TARGETS:
+        if other_arch == ARCH:
+            continue
+        changed_exe = bytearray(original_exe)
+        offset = struct.unpack_from('<I', changed_exe, 0x3c)[0]
+        struct.pack_into('<H', changed_exe, offset+4, TARGETS[other_arch][1])
+        (npp/'notepad++.exe').write_bytes(changed_exe)
+        run(expected=1)
+        assert target.read_bytes() == previous
+        assert not (package/'.install-state.json').exists()
+        assert 'architecture' in commands[-1]['stderr'].lower(), commands[-1]
+    (npp/'notepad++.exe').write_bytes(original_exe)
+    (EVIDENCE/'installer-tests.json').write_text(json.dumps({'result': 'PASS', 'checks': ['install checksum', 'fresh-install removal', 'upgrade backup', 'modified-file guard', 'byte-exact restoration', 'reject both mismatched architectures before modification'], 'commands': commands}, indent=2)+'\n', encoding='utf-8')
+    print('7/7 installer and restoration checks passed')
 
 if __name__ == '__main__':
     main()

@@ -4,7 +4,7 @@
 
 ## 安装与升级
 
-下载手动安装包（名称以 `-x64.zip` 结尾），关闭 Notepad++，解压并将 `YamlProperties` 文件夹复制到 Notepad++ 的 `plugins` 目录，再启动编辑器。
+下载手动安装包（按 Notepad++ 架构选择 `-x86.zip`、`-x64.zip` 或 `-arm64.zip`），关闭 Notepad++，解压并将 `YamlProperties` 文件夹复制到 Notepad++ 的 `plugins` 目录，再启动编辑器。
 
 也可在解压目录运行安装脚本；目标位于 Program Files 时，使用管理员 PowerShell：
 
@@ -12,7 +12,7 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-脚本会备份已有的同名 DLL。需要回退时，先关闭 Notepad++，再使用同一份脚本：
+脚本会核对 DLL 与 Notepad++ 的架构，并备份已有的同名 DLL。架构不匹配时，在修改安装目录前报错。需要回退时，先关闭 Notepad++，再使用同一份脚本：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Restore
@@ -20,7 +20,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Restore
 
 自定义安装目录时，两条命令均加 `-NotepadDir 'D:\Apps\Notepad++'`。首次安装的回退只移除本插件 DLL；升级回退则恢复原 DLL。保留安装包旁的 `.install-state.json` 和 `.backups` 目录。
 
-GitHub Actions 的构建产物需要登录 GitHub 后下载。外层构建包中包含手动安装包、Plugins Admin 专用包和源码包；手动安装使用名称以 `-x64.zip` 结尾的 ZIP。Plugins Admin 专用包用于官方插件目录安装，相关流程见[发布指南](RELEASING.md)。
+GitHub Actions 的构建产物需要登录 GitHub 后下载。外层构建包中包含手动安装包、Plugins Admin 专用包和源码包；手动安装时，按 Notepad++ 架构选择 `-x86.zip`、`-x64.zip` 或 `-arm64.zip`。Plugins Admin 专用包用于官方插件目录安装，相关流程见[发布指南](RELEASING.md)。
 
 ## 转换命令
 

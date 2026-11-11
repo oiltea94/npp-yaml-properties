@@ -230,7 +230,7 @@ void toggle_new_tab() {
 }
 void about() {
     MessageBoxW(npp._nppHandle,
-        L"YamlProperties " YP_VERSION_W L" (x64)\n\n"
+        L"YamlProperties " YP_VERSION_W L" (" YP_ARCH_W L")\n\n"
         L"默认在新标签页打开结果，保留原文。\n"
         L"取消勾选后替换选区或全文，可一次撤销；设置自动记忆。\n"
         L"默认：点号表示层级，[0] 表示数组下标。\n"

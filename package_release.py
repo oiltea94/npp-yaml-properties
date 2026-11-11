@@ -1,21 +1,28 @@
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import shutil
 import zipfile
+from build_config import TARGETS, architecture, target_dir, pe_machine
 
 ROOT = Path(__file__).resolve().parent
-DIST = ROOT/'dist'
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--arch', choices=TARGETS, default=architecture())
+    args = parser.parse_args()
+    DIST = target_dir('dist', args.arch)
     manifest = json.loads((DIST/'manifest.json').read_text())
     dll = DIST/manifest['file']
+    if manifest['architecture'] != args.arch or pe_machine(dll.read_bytes()) != TARGETS[args.arch][1]:
+        raise RuntimeError('DLL architecture differs from the requested package.')
     if hashlib.sha256(dll.read_bytes()).hexdigest() != manifest['sha256']:
         raise RuntimeError('DLL differs from the verified build manifest.')
     version = manifest['version']
     source = DIST/f'YamlProperties-{version}-source.zip'
     standalone = ['.gitignore', '.gitattributes', 'VERSION', 'CHANGELOG.md', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SPEC.md', 'THIRD_PARTY.md',
-                  'bootstrap.py', 'build.ps1', 'build.py', 'install.ps1', 'package_release.py']
+                  'bootstrap.py', 'build.ps1', 'build.py', 'build_config.py', 'install.ps1', 'package_release.py']
     files = [ROOT/name for name in standalone]
     for name in ['src', 'tests', 'vendor', 'docs', 'scripts', '.github']:
         files.extend(p for p in (ROOT/name).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
@@ -30,7 +37,7 @@ def main():
         (ROOT/'.tools/llvm-mingw-20261104-ucrt-x86_64/LICENSE.TXT', 'LLVM-runtime.txt')
     ]:
         shutil.copy2(original, notice/name)
-    binary = DIST/f'YamlProperties-{version}-x64.zip'
+    binary = DIST/f'YamlProperties-{version}-{args.arch}.zip'
     with zipfile.ZipFile(binary, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         archive.write(dll, manifest['file'])
         archive.write(DIST/'manifest.json', 'manifest.json')
@@ -42,7 +49,7 @@ def main():
             archive.write(file, Path('licenses')/file.name)
         archive.write(source, Path('source')/source.name)
     # Plugins Admin creates plugins/YamlProperties itself, so the DLL must be at ZIP root.
-    admin = DIST/f'YamlProperties-{version}-x64-plugin-admin.zip'
+    admin = DIST/f'YamlProperties-{version}-{args.arch}-plugin-admin.zip'
     with zipfile.ZipFile(admin, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         archive.write(dll, 'YamlProperties.dll')
         for name in ['LICENSE', 'THIRD_PARTY.md']:

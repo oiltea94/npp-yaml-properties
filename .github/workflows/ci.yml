@@ -12,8 +12,23 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            runner: windows-latest
+            output: dist/x86
+          - arch: x64
+            runner: windows-latest
+            output: dist
+          - arch: arm64
+            runner: windows-11-arm
+            output: dist/arm64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    env:
+      YP_ARCH: ${{ matrix.arch }}
     defaults:
       run:
         shell: pwsh
@@ -22,10 +37,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          architecture: x64
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
+          architecture: x64
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -41,6 +58,15 @@ jobs:
         run: python tests/limits_test.py
       - name: Test plugin-list metadata generation
         run: python tests/plugin_list_test.py
+      - name: Download matching portable Notepad++
+        run: |
+          python tests/download_npp.py
+          $folder = if ($env:YP_ARCH -eq 'x64') { '.runtime/npp-source' } else { ".runtime/$env:YP_ARCH/npp-source" }
+          "NPP_TEST_DIR=$((Resolve-Path $folder).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Test real editor integration
+        run: python tests/smoke_plugin.py
+      - name: Test installation and rollback
+        run: python tests/installer_test.py
       - name: Package releases
         run: python package_release.py
       - name: Verify DLL version and release archives
@@ -48,16 +74,16 @@ jobs:
       - name: Upload release candidates
         uses: actions/upload-artifact@v7
         with:
-          name: YamlProperties-x64-release-candidates
+          name: YamlProperties-${{ matrix.arch }}-release-candidates
           path: |
-            dist/*.zip
-            dist/manifest.json
-            dist/checksums.json
+            ${{ matrix.output }}/*.zip
+            ${{ matrix.output }}/manifest.json
+            ${{ matrix.output }}/checksums.json
           if-no-files-found: error
       - name: Upload validation records
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: validation-records
+          name: validation-records-${{ matrix.arch }}
           path: evidence/
           if-no-files-found: ignore

@@ -1,4 +1,4 @@
-"""Build the native x64 plugin and run semantic tests; standard-library only."""
+"""Build a Windows target and run semantic tests; standard-library only."""
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import argparse
@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+from build_config import TARGETS, architecture, target_dir, pe_machine
 
 ROOT = Path(__file__).resolve().parent
 def run(args):
@@ -18,12 +19,16 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--compiler', required=True)
+    parser.add_argument('--compiler', help='Override the target C++ compiler')
+    parser.add_argument('--arch', choices=TARGETS, default=architecture())
+    parser.add_argument('--compile-only', action='store_true', help='Cross-compile without executing target tests')
     parser.add_argument('--core-only', action='store_true')
     args = parser.parse_args()
-    cxx = Path(args.compiler)
-    build = ROOT / 'build'
-    build.mkdir(exist_ok=True)
+    arch = args.arch
+    triple = TARGETS[arch][0] + '-w64-mingw32'
+    cxx = Path(args.compiler) if args.compiler else ROOT / '.tools/llvm-mingw-20261104-ucrt-x86_64/bin' / (triple + '-clang++.exe')
+    build = target_dir('build', arch)
+    build.mkdir(parents=True, exist_ok=True)
     version = (ROOT / 'VERSION').read_text(encoding='ascii').strip()
     if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version):
         raise ValueError('VERSION must contain major.minor.patch numeric components.')
@@ -33,10 +38,11 @@ def main():
     header = ('#pragma once\n'
               f'#define YP_VERSION_STRING "{version}"\n'
               f'#define YP_VERSION_W L"{version}"\n'
+              f'#define YP_ARCH_W L"{arch}"\n'
               '#define YP_VERSION_NUMBERS ' + ','.join(map(str, [*numbers, 0])) + '\n')
     (build / 'version.h').write_text(header, encoding='ascii')
-    evidence = ROOT / 'evidence'
-    evidence.mkdir(exist_ok=True)
+    evidence = target_dir('evidence', arch)
+    evidence.mkdir(parents=True, exist_ok=True)
     yaml = ROOT / 'vendor/yaml-cpp-0.8.0'
     includes = ['-I', yaml / 'include', '-I', ROOT / 'src', '-I', ROOT / 'vendor/npp', '-I', build]
     common = ['-std=c++17', '-O2', '-DYAML_CPP_STATIC_DEFINE', '-DUNICODE', '-D_UNICODE', '-DNOMINMAX', *includes]
@@ -55,27 +61,36 @@ def main():
     run([cxx, *common, '-Wall', '-Wextra', '-Werror', '-c', ROOT / 'src/converter.cpp', '-o', core])
     test = build / 'converter_test.exe'
     run([cxx, *common, ROOT / 'tests/converter_test.cpp', core, archive, '-static', '-o', test])
-    result = subprocess.run([test], cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
-    (evidence / 'core-tests.txt').write_text(result.stdout + result.stderr, encoding='utf-8')
-    print(result.stdout, flush=True)
-    if result.returncode:
-        return result.returncode
+    if pe_machine(test.read_bytes()) != TARGETS[arch][1]:
+        raise ValueError('Compiler produced the wrong target architecture.')
+    if args.compile_only:
+        (evidence / 'core-tests.txt').write_text('NOT RUN: cross-compiled target; run on a compatible Windows host.\n', encoding='utf-8')
+        print('Target tests compiled but not executed (--compile-only).', flush=True)
+    else:
+        result = subprocess.run([test], cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        (evidence / 'core-tests.txt').write_text(result.stdout + result.stderr, encoding='utf-8')
+        print(result.stdout, flush=True)
+        if result.returncode:
+            return result.returncode
     if args.core_only:
         return 0
-    dist = ROOT / 'dist/YamlProperties'
+    dist = target_dir('dist', arch) / 'YamlProperties'
     dist.mkdir(parents=True, exist_ok=True)
     dll = dist / 'YamlProperties.dll'
     resource = build / 'plugin-resource.o'
-    run([cxx.parent / 'x86_64-w64-mingw32-windres.exe', '-I', build,
+    run([cxx.parent / (triple + '-windres.exe'), '-I', build,
          '-i', ROOT / 'src/plugin.rc', '-o', resource, '-O', 'coff'])
     run([cxx, *common, '-Wall', '-Wextra', '-Werror', '-shared', ROOT / 'src/plugin.cpp', resource, core, archive,
          '-static', '-luser32', '-Wl,--no-insert-timestamp', '-o', dll])
     run([cxx, *common, ROOT / 'src/cli.cpp', core, archive, '-static', '-o', build / 'ypconvert.exe'])
     info = run([cxx.parent / 'llvm-readobj.exe', '--coff-exports', '--coff-imports', dll])
     (evidence / 'dll-inspection.txt').write_text(info, encoding='utf-8')
-    manifest = {'version': version, 'architecture': 'x64', 'file': 'YamlProperties/YamlProperties.dll',
+    if pe_machine(dll.read_bytes()) != TARGETS[arch][1]:
+        raise ValueError('DLL architecture differs from requested target.')
+    manifest = {'version': version, 'architecture': arch, 'file': 'YamlProperties/YamlProperties.dll',
+                'core_tests': 'not-run-cross-compile' if args.compile_only else 'passed',
                 'sha256': hashlib.sha256(dll.read_bytes()).hexdigest(), 'bytes': dll.stat().st_size}
-    (ROOT / 'dist/manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+    (target_dir('dist', arch) / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(manifest, indent=2), flush=True)
     return 0
 

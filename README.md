@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml"><img src="https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml/badge.svg?branch=main" alt="Windows build and release checks"></a>
-  <img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64">
+  <img src="https://img.shields.io/badge/Windows-x86%20%7C%20x64%20%7C%20ARM64-0078D4" alt="Windows x86, x64 and ARM64">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
 </p>
 
@@ -20,7 +20,7 @@
 - **Convert both ways**: YAML ↔ Properties, with optional automatic format detection.
 - **Choose what to convert**: process a selection or the entire document, and open the result in a new tab or replace the original text.
 - **Handle special keys**: supports keys such as `com.example`, Chinese characters, spaces, and escape sequences.
-- **Run locally**: a native x64 plugin; conversion requires no network connection.
+- **Run locally**: native x86, x64 and ARM64 plugins; conversion requires no network connection.
 
 ## Example
 
@@ -43,9 +43,15 @@ When converting back, dots expand into nested keys by default, except that logge
 
 ## Installation
 
-Requires **Windows and the x64 edition of Notepad++**.
+Supports **32-Bit (x86), 64-Bit (x64), and 64-Bit ARM (ARM64) Notepad++**. Match the plugin to the architecture of Notepad++, not just Windows.
 
-1. Download the manual installation package ending in **`-x64.zip`** from [Releases](https://github.com/oiltea94/npp-yaml-properties/releases). If no release is available yet, download the build artifact from a successful [Actions](https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml) run and extract it to find the ZIP.
+| Notepad++ edition | Manual package suffix |
+|---|---|
+| 32-Bit | `-x86.zip` |
+| 64-Bit | `-x64.zip` |
+| 64-Bit ARM | `-arm64.zip` |
+
+1. Download the manual installation package ending in **`-x86.zip`, `-x64.zip`, or `-arm64.zip`** for your Notepad++ edition from [Releases](https://github.com/oiltea94/npp-yaml-properties/releases). If your architecture is not in a published release yet, download its build artifact from a successful [Actions](https://github.com/oiltea94/npp-yaml-properties/actions/workflows/ci.yml) run and extract it to find the ZIP.
 2. Close Notepad++, extract the package, and copy the `YamlProperties` folder into Notepad++'s `plugins` directory.
 3. Restart Notepad++ and open **Plugins → YamlProperties**.
 

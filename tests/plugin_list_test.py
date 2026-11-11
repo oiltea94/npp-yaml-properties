@@ -42,6 +42,18 @@ class PluginListTests(unittest.TestCase):
         self.assertEqual(github_repository('https://github.com/example/YamlProperties.git/'),
                          'https://github.com/example/YamlProperties')
 
+    def test_all_supported_architectures_generate_distinct_asset_urls(self):
+        for arch in ['x86', 'x64', 'arm64']:
+            with self.subTest(architecture=arch):
+                archive = self.archive.with_name(f'YamlProperties-0.3.1-{arch}-plugin-admin.zip')
+                archive.write_bytes(self.archive.read_bytes())
+                manifest = dict(self.manifest, architecture=arch)
+                self.assertTrue(self.entry(manifest=manifest, archive=archive)['repository'].endswith(archive.name))
+
+    def test_mismatched_archive_architecture_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'filename'):
+            self.entry(manifest=dict(self.manifest, architecture='arm64'))
+
     def test_invalid_repository_is_rejected(self):
         for value in ['http://github.com/example/repo', 'https://example.com/a/b',
                       'https://github.com/a/b/tree/main', 'https://github.com/a/b?token=x',

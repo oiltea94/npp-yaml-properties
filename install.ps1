@@ -6,14 +6,23 @@ $ErrorActionPreference = 'Stop'
 $NotepadDir = [IO.Path]::GetFullPath($NotepadDir)
 $exe = Join-Path $NotepadDir 'notepad++.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "Notepad++ not found: $exe" }
-$stream = [IO.File]::OpenRead($exe)
-try {
-    $reader = New-Object IO.BinaryReader($stream)
-    $stream.Position = 0x3c
-    $peOffset = $reader.ReadInt32()
-    $stream.Position = $peOffset + 4
-    if ($reader.ReadUInt16() -ne 0x8664) { throw 'This plugin requires x64 Notepad++.' }
-} finally { $stream.Dispose() }
+function Get-Machine([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $reader = New-Object IO.BinaryReader($stream)
+        if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5a4d) { throw "Invalid PE file: $Path" }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ([long]$peOffset + 6 -gt $stream.Length) { throw "Invalid PE offset: $Path" }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x4550) { throw "Invalid PE signature: $Path" }
+        return [int]$reader.ReadUInt16()
+    } finally { $stream.Dispose() }
+}
+$architectures = @{ 0x014c = 'x86'; 0x8664 = 'x64'; 0xaa64 = 'arm64' }
+$hostMachine = Get-Machine $exe
+if (-not $architectures.ContainsKey($hostMachine)) { throw 'Unsupported Notepad++ architecture.' }
+$architecture = $architectures[$hostMachine]
 $pluginDir = Join-Path $NotepadDir 'plugins\YamlProperties'
 $target = Join-Path $pluginDir 'YamlProperties.dll'
 $journal = Join-Path $PSScriptRoot '.install-state.json'
@@ -49,9 +58,13 @@ if ($Restore) {
     Remove-Item -LiteralPath $journal
     exit 0
 }
-$source = Join-Path $PSScriptRoot 'dist\YamlProperties\YamlProperties.dll'
-if (-not (Test-Path -LiteralPath $source)) { $source = Join-Path $PSScriptRoot 'YamlProperties\YamlProperties.dll' }
+$source = Join-Path $PSScriptRoot 'YamlProperties\YamlProperties.dll'
+if (-not (Test-Path -LiteralPath $source)) {
+    $relative = if ($architecture -eq 'x64') { 'dist\YamlProperties\YamlProperties.dll' } else { "dist\$architecture\YamlProperties\YamlProperties.dll" }
+    $source = Join-Path $PSScriptRoot $relative
+}
 if (-not (Test-Path -LiteralPath $source)) { throw 'Build the plugin first, or extract the complete release ZIP.' }
+if ((Get-Machine $source) -ne $hostMachine) { throw "Plugin architecture does not match $architecture Notepad++. Use the matching release package." }
 $newHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
 if (Test-Path -LiteralPath $journal) {
     $state = Get-Content -Raw -LiteralPath $journal | ConvertFrom-Json
