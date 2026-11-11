@@ -1,0 +1,14 @@
+/.tools/
+/build/
+/dist/
+/.runtime/
+/evidence/
+*.bak
+/.backups/
+/.install-state.json*
+__pycache__/
+*.py[cod]
+/.vs/
+/.vscode/
+*.user
+*.suo
