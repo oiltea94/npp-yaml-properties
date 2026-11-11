@@ -1,12 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 — 2026-11-11
 
 - Make the default README English and add a linked Simplified Chinese README.
 - Include both README languages in manual installation and source packages.
-
-## 0.3.1 — Prepared for release
-
 - Add Windows DLL version information, generated from the single `VERSION` file.
 - Provide a separate ZIP with the DLL at its root for Notepad++ Plugins Admin.
 - Exclude local diagnostics, toolchains and test environments from source releases.

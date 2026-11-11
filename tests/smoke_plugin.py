@@ -191,8 +191,11 @@ def main():
         assert read(sci) == logger_properties
         passed('optional auto command detects YAML filename', output=read(sci))
         send(hwnd, 0x111, commands['自动识别并转换'])
-        assert '"off"' in read(sci) and '"debug"' in read(sci) and '"his"' in read(sci)
-        passed('auto command detects generated Properties tab')
+        logger_result = read(sci).replace('\r\n', '\n')
+        assert logger_result == ('"logging":\n  "level":\n'
+                                 '    "com":\n      "example": "off"\n'
+                                 '    "org":\n      "example": "debug"\n'), repr(logger_result)
+        passed('auto command detects generated Properties tab', output=logger_result)
         open_fixture('colon.properties', 'key: value\n')
         send(hwnd, 0x111, commands['自动识别并转换'])
         assert read(sci) == '"key": "value"\n'

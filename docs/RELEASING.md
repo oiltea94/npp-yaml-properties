@@ -1,6 +1,6 @@
 # GitHub 与 Notepad++ 官方插件目录发布
 
-本项目当前准备版本为 **0.3.1**，提供 Windows x64 构建。项目仓库为 [oiltea94/npp-yaml-properties](https://github.com/oiltea94/npp-yaml-properties)。正式 Release 与官方插件目录收录按下文流程完成；作者署名由维护者在生成目录条目时填写。
+本项目发布版本由根目录 `VERSION` 文件指定，提供 Windows x64 构建。项目仓库为 [oiltea94/npp-yaml-properties](https://github.com/oiltea94/npp-yaml-properties)。正式 Release 与官方插件目录收录按下文流程完成；作者署名由维护者在生成目录条目时填写。
 
 ## 1. 哪些内容提交到 GitHub
 
