@@ -53,9 +53,9 @@ GitHub Actions 的构建产物需要登录 GitHub 后下载。外层构建包中
 
 原位转换保留文件名。内容格式变化后，原扩展名可能不再匹配；再次转换时使用对应的手动命令，或另存为匹配的扩展名。
 
-## 键名模式
+## 键名展开规则
 
-默认使用点号和零基下标展开约定：
+统一使用点号和零基下标展开约定：
 
 ```properties
 server.port=8080
@@ -67,17 +67,15 @@ code=00123
 转换为：
 
 ```yaml
-"server":
-  "port": "8080"
-"servers":
-  - "localhost"
-  - "example.com"
-"code": "00123"
+server:
+  port: 8080
+servers:
+  - localhost
+  - example.com
+code: 00123
 ```
 
-开启 **保留完整键名（不拆分点号和下标）** 后，`server.port`、`servers[0]` 都作为普通完整键名，输出扁平 YAML 映射。该模式下，YAML 输入也需为扁平标量映射。
-
-YAML 中的 `com.example` 等带点键可以展开为 Properties。反向转换默认按点号展开层级；Properties 不记录点号原先属于键名还是层级，因此不保证恢复原来的键名分组。`off` 保留为字符串，不转换为布尔值。
+YAML 中的 `com.example` 等带点键可以展开为 Properties。反向转换默认按点号展开层级；Properties 不记录点号原先属于键名还是层级，因此不保证恢复原来的键名分组。引号默认遵循输入写法，例如 `off` 输出为 `off`，`"off"` 输出为 `"off"`。
 
 `logging.level.` 是特例：该前缀后面的完整包名或类名作为一个键，保留大小写和点号，允许父包和具体类分别配置日志级别。例如：
 
@@ -89,21 +87,78 @@ logging.level.com.example.dao.Mapper=off
 转换为：
 
 ```yaml
-"logging":
-  "level":
-    "com.example": "debug"
-    "com.example.dao.Mapper": "off"
+logging:
+  level:
+    com.example: debug
+    com.example.dao.Mapper: off
 ```
 
-其他配置继续展开层级和数组。`a=1` 与 `a.b=2` 等普通父子冲突仍报错；`logging.level=info` 与具体日志名称同时出现也会报错。完整键名模式仍将整个 `logging.level.com.example` 作为一个键。
+其他配置继续展开层级和数组。`a=1` 与 `a.b=2` 等普通父子冲突仍报错；`logging.level=info` 与具体日志名称同时出现也会报错。
+
+## 引号规则
+
+Properties 原本带单引号或双引号，输出就保留；原本没有引号，输出也不添加。数字、布尔值、日期及空值同样遵循输入写法，不做自动补引号处理。
+
+例如 `name=demo`、`profile=${profileActive}`、`code=00123` 输出：
+
+```yaml
+name: demo
+profile: ${profileActive}
+code: 00123
+```
+
+保留原有引号的例子：
+
+```properties
+name="demo"
+profile='${profileActive}'
+logging.pattern.file="%d{HH:mm:ss} %m%n"
+```
+
+输出：
+
+```yaml
+name: "demo"
+profile: '${profileActive}'
+logging:
+  pattern:
+    file: "%d{HH:mm:ss} %m%n"
+```
+
+转换直接写出 Properties 解析后的键和值，不额外校验或修复其 YAML 标量语法。已有引号作为 YAML 语法使用；未加引号的数字、布尔值、空值、注释符号等由 YAML 读取器解释，因此不保证字符串类型或往返值完全不变。Java Properties 转义和续行仍按原规则解析。
+
+该规则固定适用于手动和自动转换及两种输出位置，无需配置。命令行使用 `ypconvert to-yaml`。
+
+YAML → Properties 也保留值原有的双引号。例如：
+
+```yaml
+name: "demo"
+profile: "${profileActive}"
+code: "00123"
+plain: demo
+text: "line\nnext"
+```
+
+输出：
+
+```properties
+name="demo"
+profile="${profileActive}"
+code="00123"
+plain=demo
+text="line\\nnext"
+```
+
+双引号值中的 YAML 转义写法会保留，反斜杠按 Java Properties 规则再转义一次，因此再转回 YAML 时仍是原来的引号和转义，不会重复包裹。跨行双引号值按照 YAML 的折行规则解析后，整理为带双引号的单行值。锚点、标签与别名不影响双引号保留。此规则只保留值的双引号语法；YAML 单引号值、块文本和键名仍按原规则取解析后的文本。命令行使用 `ypconvert to-properties`。
 
 ## 转换规则
 
-- **字符串值**：Properties 的值全部是字符串，YAML 输出明确加双引号，保留 `00123`、`true`、日期等文本，不自动猜类型。
+- **引号**：按输入保留已有引号，不添加新引号。点号层级与数组下标始终展开，`logging.level` 下保留完整日志名称。
+- **值的类型**：保留源文本写法，由 YAML 读取器判断类型。
 - **文本与编码**：支持 UTF-8、中文、表情、`\uXXXX`、UTF-16 代理对、Java 转义、`=` / `:` / 空白分隔符、续行和 CR/LF/CRLF。
 - **特殊键名**：支持点号、中文、空格、`:`、`=`、`#`、`!`、斜杠、反斜杠及 `name[prod]` 等文本方括号；需要转义的 Properties 字符自动转义。`a[0]` 等数字后缀仍表示数组。
 - **结构与冲突**：YAML 根节点须为映射。重复键、父子路径冲突、展开后的同名键、稀疏数组、负数或非规范下标、空路径段会报错。
-- **有损结构**：`null`、空嵌套映射和空数组会报错；显式空字符串 `""` 可以转换。
+- **有损结构**：YAML → Properties 遇到 `null`、空嵌套映射和空数组会报错；显式空字符串 `""` 可以转换。
 - **YAML 特性**：普通无循环别名展开为值；递归别名、多文档、合并键和自定义标签会报错。注释、排版、YAML 原始类型和锚点名称不保留。
 - **Spring 配置**：使用常见的点号与下标约定，未实现 Spring 全部 relaxed binding、Map 键保留语法或 profile 合并行为。
 - **处理上限**：输入 8 MiB、输出 16 MiB、深度 64、100,000 节点、数组最大下标 9,999。
@@ -114,11 +169,10 @@ logging.level.com.example.dao.Mapper=off
 
 ## 配置保存
 
-两个开关保存在 Notepad++ 插件配置目录的 `YamlProperties.ini`：
+输出位置开关保存在 Notepad++ 插件配置目录的 `YamlProperties.ini`：
 
 | 配置项 | 默认值 | 含义 |
 |---|---|---|
-| `LiteralKeys` | `0` | `1` 保留完整键名；`0` 展开点号与数组下标 |
 | `NewTab` | `1` | `1` 新标签页输出；`0` 原位替换 |
 
-旧配置缺少 `NewTab` 时默认开启。设置保存失败时，当前选项保持不变。
+旧配置缺少 `NewTab` 时默认开启。旧版引号和完整键名设置不再读取，保存输出位置时会移除。设置采用原子保存；保存失败时，当前选项保持不变。

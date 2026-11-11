@@ -39,7 +39,7 @@ server.port=8080
 logging.level.com.example=off
 ```
 
-When converting back, dots expand into nested keys by default, except that logger names beneath `logging.level` remain complete keys (for example, `com.example` and `com.example.dao.Mapper` can coexist). Values are emitted as quoted strings. Other original key grouping, comments, and formatting are not preserved. [Conversion rules (中文) →](docs/USAGE.md#转换规则)
+When converting back, dots expand into nested keys by default, except that logger names beneath `logging.level` remain complete keys (for example, `com.example` and `com.example.dao.Mapper` can coexist). Existing quotes in Properties are retained as YAML syntax and no new quotes are added, including for `00123`, `true`, or `off`. YAML double-quoted values also keep their quotes in Properties: `name: "demo"` becomes `name="demo"`. YAML escape spellings are retained with Java Properties escaping; multiline double-quoted values become a quoted single line. Other original key grouping, comments, and formatting are not preserved. [Conversion rules (中文) →](docs/USAGE.md#转换规则)
 
 ## Installation
 
@@ -69,14 +69,13 @@ Open a configuration file and select **Plugins → YamlProperties → 自动识�
 
 If text is selected, only that selection is converted; otherwise, the whole document is converted. By default, the result opens in a new tab and the original text is preserved.
 
-The conversion options currently use Chinese menu labels:
+The output option uses a Chinese menu label:
 
 | Menu option | Behavior |
 |---|---|
 | 在新标签页打开转换结果 (open results in a new tab) | Enabled by default. Disable it to replace text in place; press **Ctrl+Z** to undo the converted text in one step. |
-| 保留完整键名 (preserve full keys) | Disabled by default. Enable it to treat keys such as `server.port` as a single key, useful for flat configurations. |
 
-Both options persist across restarts. Automatic detection prioritizes the file extension; use an explicit conversion command when the format is ambiguous.
+The output preference persists across restarts. Automatic detection prioritizes the file extension; use an explicit conversion command when the format is ambiguous.
 
 ## Documentation and contributing
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve double-quoted YAML values when converting to Properties, including escape spellings and aliases; normalize multiline quoted values to a quoted single line.
+- Remove the preserve-full-keys option and `--literal` flag; always expand dotted paths and array indices while retaining complete logger names beneath `logging.level`.
+- Preserve existing Properties quotes as YAML syntax, without adding quotes to unquoted keys or values, including numbers and booleans.
 - Add x86 (32-Bit) and ARM64 (64-Bit ARM) builds alongside x64, with separate packages and plugin-list metadata.
 - Check the plugin architecture against Notepad++ before installation.
 - Run core, Java compatibility, editor, installer and release checks for all three architectures in CI.

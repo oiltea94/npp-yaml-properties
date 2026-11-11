@@ -171,8 +171,7 @@ std::vector<Property> parse_properties(std::string_view input) {
 }
 
 struct Part { bool index = false; std::string key; std::size_t number = 0; };
-std::vector<Part> parse_path(const Property& property, KeyMode mode) {
-    if (mode == KeyMode::Literal) return {{false, property.key, 0}};
+std::vector<Part> parse_path(const Property& property) {
     const auto& key = property.key;
     // Spring Boot logger names are map keys, not nested property paths.
     // A package and one of its classes can each have their own level.
@@ -237,7 +236,7 @@ std::vector<Part> parse_path(const Property& property, KeyMode mode) {
             ++i;
         }
     }
-    if (result.empty()) fail("Empty path; enable Literal keys to preserve an empty key.", property.line);
+    if (result.empty()) fail("Empty property key has no hierarchical path.", property.line);
     return result;
 }
 struct Tree {
@@ -248,8 +247,8 @@ struct Tree {
     std::map<std::size_t, std::unique_ptr<Tree>> items;
     std::size_t line = 0;
 };
-void insert(Tree& root, const Property& property, KeyMode mode, std::size_t& nodes) {
-    auto path = parse_path(property, mode);
+void insert(Tree& root, const Property& property, std::size_t& nodes) {
+    auto path = parse_path(property);
     auto* current = &root;
     for (const auto& part : path) {
         auto expected = part.index ? Tree::Kind::Sequence : Tree::Kind::Map;
@@ -276,32 +275,47 @@ void insert(Tree& root, const Property& property, KeyMode mode, std::size_t& nod
     current->kind = Tree::Kind::Scalar;
     current->value = property.value;
 }
-void emit_tree(YAML::Emitter& out, const Tree& tree) {
-    switch (tree.kind) {
-    case Tree::Kind::Scalar: out << YAML::DoubleQuoted << tree.value; break;
-    case Tree::Kind::Map:
-        out << YAML::BeginMap;
-        for (const auto& entry : tree.entries) {
-            out << YAML::Key << YAML::DoubleQuoted << entry.first << YAML::Value;
-            emit_tree(out, *entry.second);
+// Keep source quote characters as syntax. yaml-cpp's string emitter adds
+// protective quotes automatically, so write the block layout directly.
+void emit_source_tree(std::string& out, const Tree& tree, std::size_t indent = 0, bool inline_first = false) {
+    auto prefix = [&] {
+        if (!inline_first) out.append(indent, ' ');
+        inline_first = false;
+    };
+    auto child = [&](const Tree& node) {
+        if (node.kind == Tree::Kind::Scalar) out += " " + node.value + "\n";
+        else {
+            out += '\n';
+            emit_source_tree(out, node, indent + 2);
         }
-        out << YAML::EndMap;
+    };
+    switch (tree.kind) {
+    case Tree::Kind::Map:
+        if (tree.entries.empty()) { prefix(); out += "{}\n"; }
+        for (const auto& entry : tree.entries) {
+            prefix();
+            out += entry.first + ":";
+            child(*entry.second);
+            if (out.size() > max_output) fail("Output exceeds 16 MiB.");
+        }
         break;
     case Tree::Kind::Sequence: {
-        out << YAML::BeginSeq;
         std::size_t next = 0;
         for (const auto& item : tree.items) {
             if (item.first != next++) fail("Sparse array: indices must start at 0 without gaps.", tree.line);
-            emit_tree(out, *item.second);
+            prefix();
+            out += '-';
+            if (item.second->kind == Tree::Kind::Map || item.second->kind == Tree::Kind::Sequence) {
+                out += ' ';
+                emit_source_tree(out, *item.second, indent + 2, true);
+            } else child(*item.second);
+            if (out.size() > max_output) fail("Output exceeds 16 MiB.");
         }
-        out << YAML::EndSeq;
         break;
     }
-    case Tree::Kind::Unset: fail("Unexpected empty tree.");
+    default: fail("Unexpected scalar or empty tree.");
     }
-    if (out.size() > max_output) fail("Output exceeds 16 MiB.");
 }
-
 std::size_t line_of(const YAML::Node& node) {
     return node.Mark().is_null() ? 0 : static_cast<std::size_t>(node.Mark().line + 1);
 }
@@ -312,8 +326,57 @@ void check_tag(const YAML::Node& node) {
         "tag:yaml.org,2002:null", "tag:yaml.org,2002:timestamp"};
     if (!allowed.count(tag)) fail("Unsupported YAML tag: " + tag, line_of(node));
 }
+std::string property_scalar(const YAML::Node& node, std::string_view source) {
+    // yaml-cpp marks a node before its tag/anchor, and aliases share that mark.
+    // Inspect only the already parsed scalar's source, not mapping key styles.
+    const auto mark = node.Mark();
+    if (mark.is_null() || mark.pos < 0) return node.Scalar();
+    auto pos = static_cast<std::size_t>(mark.pos);
+    while (pos < source.size()) {
+        const char c = source[pos];
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { ++pos; continue; }
+        if (c == '#') {
+            pos = source.find_first_of("\r\n", pos);
+            continue;
+        }
+        if (c == '&') {
+            pos = source.find_first_of(" \t\r\n[]{},", pos + 1);
+            continue;
+        }
+        if (c == '!') {
+            ++pos;
+            if (pos < source.size() && source[pos] == '<') {
+                pos = source.find('>', pos + 1);
+                if (pos != std::string_view::npos) ++pos;
+            } else {
+                pos = source.find_first_of(" \t\r\n[]{},\"", pos);
+            }
+            continue;
+        }
+        break;
+    }
+    if (pos >= source.size() || source[pos] != '"') return node.Scalar();
+    const auto start = pos++;
+    while (pos < source.size()) {
+        if (source[pos] == '\\') {
+            pos += 2;
+        } else if (source[pos++] == '"') {
+            const auto quoted = source.substr(start, pos - start);
+            if (quoted.find_first_of("\r\n") == std::string_view::npos)
+                return std::string(quoted);
+            // Physical line folding/continuations depend on YAML indentation.
+            // Emit the decoded value on one line before Java Properties escaping.
+            YAML::Emitter out;
+            out << YAML::DoubleQuoted << node.Scalar();
+            if (!out.good()) fail("Could not preserve quoted YAML value.", line_of(node));
+            return out.c_str();
+        }
+    }
+    fail("Could not locate quoted YAML value.", line_of(node));
+}
 struct Flattener {
-    KeyMode mode;
+    explicit Flattener(std::string_view input) : source(input) {}
+    std::string_view source;
     std::string output;
     std::set<std::string> keys;
     std::vector<YAML::Node> ancestors;
@@ -326,11 +389,10 @@ struct Flattener {
         if (node.IsNull()) fail("Null has no lossless Properties representation; use an explicit string.", line_of(node));
         if (node.IsScalar()) {
             if (!keys.insert(path).second) fail("Duplicate flattened key: " + path, line_of(node));
-            output += escape(path, true) + "=" + escape(node.Scalar(), false) + "\n";
+            output += escape(path, true) + "=" + escape(property_scalar(node, source), false) + "\n";
             if (output.size() > max_output) fail("Output exceeds 16 MiB.");
             return;
         }
-        if (depth && mode == KeyMode::Literal) fail("Literal keys mode requires a flat mapping of scalar values.", line_of(node));
         if (depth && node.size() == 0) fail("Empty containers have no lossless Properties representation.", line_of(node));
         for (const auto& ancestor : ancestors)
             if (node.is(ancestor)) fail("Recursive YAML alias.", line_of(node));
@@ -344,8 +406,8 @@ struct Flattener {
                 if (!local_keys.insert(key).second) fail("Duplicate YAML key: " + key, line_of(item.first));
                 if (key == "<<" && item.first.Tag() != "!" && item.first.Tag() != "tag:yaml.org,2002:str")
                     fail("Merge keys must be expanded before conversion.", line_of(item.first));
-                if (mode == KeyMode::Hierarchical && key.empty())
-                    fail("Empty YAML key; use Literal keys mode for flat mappings.", line_of(item.first));
+                if (key.empty())
+                    fail("Empty YAML key has no hierarchical path.", line_of(item.first));
                 visit(item.second, depth ? path + "." + key : key, depth+1);
             }
         } else if (node.IsSequence()) {
@@ -382,36 +444,34 @@ Format detect_format(std::string_view input) {
 }
 }
 
-std::string to_yaml(std::string_view input, KeyMode mode) {
+std::string to_yaml(std::string_view input) {
     input = validated(input);
     Tree root;
     root.kind = Tree::Kind::Map;
     std::size_t nodes = 1;
-    for (const auto& property : parse_properties(input)) insert(root, property, mode, nodes);
-    YAML::Emitter out;
-    out.SetIndent(2);
-    emit_tree(out, root);
-    if (!out.good()) fail("YAML output error: " + out.GetLastError());
-    return std::string(out.c_str(), out.size()) + "\n";
+    for (const auto& property : parse_properties(input)) insert(root, property, nodes);
+    std::string output;
+    emit_source_tree(output, root);
+    return output;
 }
-std::string to_properties(std::string_view input, KeyMode mode) {
+std::string to_properties(std::string_view input) {
     input = validated(input);
     try {
         auto docs = YAML::LoadAll(std::string(input));
         if (docs.empty()) return {};
         if (docs.size() != 1) fail("Expected a single YAML document.");
         if (!docs.front().IsMap()) fail("YAML root must be a mapping.", line_of(docs.front()));
-        Flattener flattener{mode, {}, {}, {}, 0};
+        Flattener flattener(input);
         flattener.visit(docs.front(), {}, 0);
         return flattener.output;
     } catch (const YAML::Exception& error) {
         fail("YAML parse error: " + error.msg, error.mark.is_null() ? 0 : static_cast<std::size_t>(error.mark.line+1));
     }
 }
-ConversionResult auto_convert(std::string_view input, KeyMode mode, std::optional<Format> source_hint) {
+ConversionResult auto_convert(std::string_view input, std::optional<Format> source_hint) {
     input = validated(input);
     auto source = source_hint ? *source_hint : detect_format(input);
-    if (source == Format::Yaml) return {Format::Properties, to_properties(input, mode)};
-    return {Format::Yaml, to_yaml(input, mode)};
+    if (source == Format::Yaml) return {Format::Properties, to_properties(input)};
+    return {Format::Yaml, to_yaml(input)};
 }
 }

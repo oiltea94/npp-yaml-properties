@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-using yp::KeyMode;
 using yp::to_properties;
 using yp::to_yaml;
 static void check(bool ok, const char* message) {
@@ -20,32 +19,147 @@ static void rejects(const std::function<void()>& f, const std::string& fragment)
 }
 int main() {
     std::vector<std::pair<std::string, std::function<void()>>> tests = {
+        {"YAML double quoted values retain quotes in manual and auto conversion", [] {
+            const std::string yaml = "name: \"demo\"\ncode: \"00123\"\nprofile: \"${profileActive}\"\nempty: \"\"\nplain: demo\n";
+            const std::string props = "name=\"demo\"\ncode=\"00123\"\nprofile=\"${profileActive}\"\nempty=\"\"\nplain=demo\n";
+            check(to_properties(yaml) == props, "double quotes retained");
+            check(yp::auto_convert(yaml).text == props, "auto retains double quotes");
+            check(to_yaml(props) == yaml, "no additional quote layer");
+        }},
+        {"double quoted escapes survive both syntaxes", [] {
+            const std::string yaml = "value: \"line\\nnext\\t\\\"quoted\\\" C:\\\\temp \\u4e2d \\x41\"\n";
+            const std::string props = "value=\"line\\\\nnext\\\\t\\\\\"quoted\\\\\" C:\\\\\\\\temp \\\\u4e2d \\\\x41\"\n";
+            check(to_properties(yaml) == props, "Properties escapes preserve YAML escape spelling");
+            check(to_yaml(to_properties(yaml)) == yaml, "escape spelling round trip");
+        }},
+        {"quoted values after tags anchors and comments retain their source style", [] {
+            const std::string yaml = "a: &text !!str \"demo\"\nb: *text\nc: !!str &other # comment\n  \"off\"\nd: !<tag:yaml.org,2002:str> \"00123\"\ne: ! \"yes\"\nitems: [\"one\", two, *other]\n";
+            check(to_properties(yaml) == "a=\"demo\"\nb=\"demo\"\nc=\"off\"\nd=\"00123\"\ne=\"yes\"\nitems[0]=\"one\"\nitems[1]=two\nitems[2]=\"off\"\n", "metadata and aliases");
+        }},
+        {"UTF-8 source offsets and BOM preserve double quotes", [] {
+            const std::string yaml = "\xef\xbb\xbf" "中文: 中文\n名字: \"中文😀\"\nlist: [中文, \"你好\"]\n";
+            check(to_properties(yaml) == "中文=中文\n名字=\"中文😀\"\nlist[0]=中文\nlist[1]=\"你好\"\n", "UTF-8 byte positions");
+        }},
+        {"multiline double quotes normalize to a quoted single line", [] {
+            const std::string yaml = "folded: \"first\n  second\"\njoined: \"first\\\n  second\"\n";
+            check(to_properties(yaml) == "folded=\"first second\"\njoined=\"firstsecond\"\n", "YAML line folding retained");
+            auto result = YAML::Load(to_yaml(to_properties(yaml)));
+            check(result["folded"].Scalar() == "first second" && result["joined"].Scalar() == "firstsecond", "multiline semantics");
+        }},
+        {"plain single quoted and block scalar values retain existing decoding", [] {
+            check(to_properties("plain: text\nsingle: 'demo'\nblock: |-\n  \"demo\"\n") ==
+                  "plain=text\nsingle=demo\nblock=\"demo\"\n", "only double quoted scalar syntax is retained");
+            check(to_properties("value: !!str plain\n") == "value=plain\n", "explicit string tag is not quoting");
+        }},
         {"nested YAML and arrays flatten", [] {
             check(to_properties("server:\n  port: 8080\nservers: [localhost, example.com]\n") ==
                   "server.port=8080\nservers[0]=localhost\nservers[1]=example.com\n", "flatten");
         }},
-        {"properties become nested string scalars", [] {
+        {"nested scalar spellings are preserved without extra quotes", [] {
             auto n = YAML::Load(to_yaml("server.port=8080\ncode=00123\nenabled=true\n"));
             check(n["server"]["port"].Scalar() == "8080", "port");
-            check(n["code"].Scalar() == "00123" && n["code"].Tag() == "!", "quoted code");
-            check(n["enabled"].Tag() == "!", "quoted boolean");
+            check(n["code"].Scalar() == "00123" && n["code"].Tag() == "?", "unquoted code");
+            check(n["enabled"].Tag() == "?", "unquoted boolean");
+        }},
+        {"default output never adds quotes to numeric or boolean text", [] {
+            check(to_yaml("server.port=8080\nlogging.level.com.example=off\n中文=00123\n") ==
+                  "server:\n  port: 8080\nlogging:\n  level:\n    com.example: off\n中文: 00123\n", "original unquoted values");
+            check(to_yaml("server.port=8080\n") == "server:\n  port: 8080\n", "dotted keys always expand");
+        }},
+        {"default output retains original single and double quotes", [] {
+            const std::string props = "name=\"demo\"\nprofile='${profileActive}'\ncode=\"00123\"\nflag=true\n";
+            const std::string expected = "name: \"demo\"\nprofile: '${profileActive}'\ncode: \"00123\"\nflag: true\n";
+            check(to_yaml(props) == expected, "original quotes are YAML syntax");
+            check(yp::auto_convert(props).text == expected, "auto uses original quotes");
+            check(to_yaml("\"name\"='demo'\ntrue=off\n00123=0001\n") ==
+                  "\"name\": 'demo'\ntrue: off\n00123: 0001\n", "quoted and unquoted keys preserved");
+            auto n = YAML::Load(expected);
+            check(n["name"].Scalar() == "demo" && n["profile"].Scalar() == "${profileActive}", "no extra quote layer");
+            check(n["code"].Tag() == "!" && n["flag"].Tag() == "?", "source chooses string or implicit type");
+        }},
+        {"ordinary values and Spring placeholders are plain by default", [] {
+            const std::string props = "name=中文\nhost=localhost\nprofile=${profileActive}\nsize=10GB\nurl=https://example.com\n";
+            auto yaml = to_yaml(props);
+            check(yaml == "name: 中文\nhost: localhost\nprofile: ${profileActive}\nsize: 10GB\nurl: https://example.com\n", "plain default output");
+            check(to_properties(yaml) == props, "plain text round trip");
+        }},
+        {"source quoting preserves log patterns and does not repair unquoted syntax", [] {
+            const std::string quoted = "logging.pattern.file=\"%d{yyyy-MM-dd HH:mm:ss.SSS} %5p : %m%n%wEx\"\n";
+            check(to_yaml(quoted) == "logging:\n  pattern:\n    file: \"%d{yyyy-MM-dd HH:mm:ss.SSS} %5p : %m%n%wEx\"\n", "quoted logging pattern preserved");
+            auto n = YAML::Load(to_yaml(quoted));
+            check(n["logging"]["pattern"]["file"].Scalar() == "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p : %m%n%wEx", "log format contains no added quote characters");
+            check(to_yaml("pattern=%d{HH:mm:ss}\ncomment=a # b\nempty=\nvalue=null\n") ==
+                  "pattern: %d{HH:mm:ss}\ncomment: a # b\nempty: \nvalue: null\n", "source syntax is not auto-quoted");
+        }},
+        {"source quotes work inside arrays nested arrays and dotted keys", [] {
+            const std::string props = "users[1].name='Bob'\nusers[0].name=\"Alice\"\nusers[0].enabled=true\nmatrix[0][0]=00123\nmatrix[0][1]=\"off\"\n";
+            const std::string expected = "users:\n  - name: \"Alice\"\n    enabled: true\n  - name: 'Bob'\nmatrix:\n  - - 00123\n    - \"off\"\n";
+            check(to_yaml(props) == expected, "nested blocks preserve quotes and indentation");
+            auto n = YAML::Load(expected);
+            check(n["users"][0]["name"].Scalar() == "Alice" && n["matrix"][0][1].Scalar() == "off", "nested values parse");
+            check(to_yaml("server.port=\"8080\"\n") == "server:\n  port: \"8080\"\n", "nested values retain quotes");
+            check(to_yaml("message='It''s ready'\n") == "message: 'It''s ready'\n", "original single quote escaping retained");
+        }},
+        {"double quoted special values retain source syntax", [] {
+            const std::vector<std::string> values = {"", "00123", "8080", "true", "FALSE", "off", "Yes", "N", "null", "~",
+                "0xFF", "0o17", "0b101", "1_000", "1e3", "-1.2e-3", "+12", ".5", ".NaN", "-.Inf",
+                "12:34:56", "2026-11-11", "2026-11-11T12:34:56Z", "2026-11-11 12:34:56 +08:00",
+                "<<", "=", "#comment", "a: b", "a #comment", " leading", "trailing ", "line\nbreak", "[a,b]", "*alias"};
+            for (const auto& value : values) {
+                YAML::Emitter source;
+                source << YAML::BeginMap << YAML::Key << "value" << YAML::Value << YAML::DoubleQuoted << value << YAML::EndMap;
+                auto props = to_properties(source.c_str());
+                check(to_yaml(props) == std::string(source.c_str()) + "\n", "special value quote spelling preserved");
+                check(YAML::Load(to_yaml(props))["value"].Scalar() == value, "decoded value unchanged");
+            }
+        }},
+        {"ambiguous and special keys are emitted without additional quotes", [] {
+            const std::vector<std::string> keys = {"", "true", "False", "YES", "no", "On", "OFF", "y", "N",
+                "null", "~", "00123", "1e3", "-1", "+2", ".nan", "2026-11-11", "<<", "=",
+                "a: b", "#tag", "a #comment", " key ", "line\nbreak", "[0]", "*alias", "!tag"};
+            for (const auto& key : keys) {
+                YAML::Emitter source;
+                source << YAML::BeginMap << YAML::Key << YAML::DoubleQuoted << key
+                       << YAML::Value << YAML::DoubleQuoted << "off" << YAML::EndMap;
+                if (key.empty()) {
+                    rejects([&] { to_properties(source.c_str()); }, "Empty YAML key");
+                    continue;
+                }
+                auto props = to_properties(source.c_str());
+                if (key == ".nan") {
+                    rejects([&] { to_yaml(props); }, "empty path segment");
+                    continue;
+                }
+                check(to_yaml(props) == key + ": \"off\"\n", "special key text preserved");
+            }
+        }},
+        {"manual and auto conversion use the same fixed quoting rule", [] {
+            const std::string props = "users[0].name=Alice\nprofile=${profileActive}\n";
+            const std::string expected = "users:\n  - name: Alice\nprofile: ${profileActive}\n";
+            check(to_yaml(props) == expected, "source spelling retained");
+            check(to_properties(expected) == props, "placeholder preserved");
+            check(to_yaml("a.b=text\n") == "a:\n  b: text\n", "hierarchical key spelling");
+            check(yp::auto_convert(props).text == expected, "auto uses same rule");
+            check(yp::auto_convert(expected).text == props, "YAML to Properties unaffected");
         }},
         {"arrays of objects and reversed index order", [] {
             auto n = YAML::Load(to_yaml("users[1].name=Bob\nusers[0].name=Alice\n"));
             check(n["users"].IsSequence() && n["users"].size() == 2, "sequence");
             check(n["users"][0]["name"].Scalar() == "Alice", "first object");
         }},
-        {"literal keys stay intact both ways", [] {
-            auto yaml = to_yaml("a.b=x\na[0]=y\n", KeyMode::Literal);
+        {"dotted keys and array indices always expand both ways", [] {
+            auto yaml = to_yaml("server.port=8080\nservers[0]=localhost\n");
             auto n = YAML::Load(yaml);
-            check(n["a.b"].Scalar() == "x" && n["a[0]"].Scalar() == "y", "literal keys");
-            check(to_properties(yaml, KeyMode::Literal) == "a.b=x\na[0]=y\n", "literal round trip");
+            check(n["server"]["port"].Scalar() == "8080" && n["servers"][0].Scalar() == "localhost", "nested keys and sequence");
+            check(to_properties(yaml) == "server.port=8080\nservers[0]=localhost\n", "hierarchical round trip");
         }},
         {"Java separators escapes continuation and comments", [] {
-            auto n = YAML::Load(to_yaml("# comment\r\n! comment\rkey\\ with\\ space : first\\\r\n  second\nurl=https\\://example.com\nempty\n"));
+            auto yaml = to_yaml("# comment\r\n! comment\rkey\\ with\\ space : first\\\r\n  second\nurl=https\\://example.com\nempty\n");
+            check(yaml == "key with space: firstsecond\nurl: https://example.com\nempty: \n", "Java syntax decoded");
+            auto n = YAML::Load(yaml);
             check(n["key with space"].Scalar() == "firstsecond", "continuation");
             check(n["url"].Scalar() == "https://example.com", "colon");
-            check(n["empty"].Scalar().empty(), "empty value");
+            check(n["empty"].IsNull(), "unquoted empty value follows YAML syntax");
         }},
         {"Unicode literal escaped and surrogate pairs", [] {
             auto n = YAML::Load(to_yaml("name=中文\nemoji=\\uD83D\\uDE00\nc=\\u4e2d\\u6587\n"));
@@ -56,15 +170,15 @@ int main() {
             check(YAML::Load(to_yaml("x=\\q\\z\n"))["x"].Scalar() == "qz", "unknown escape");
         }},
         {"empty continuation followed by blank line is ignored like Java", [] {
-            check(YAML::Load(to_yaml("\\\n\n", KeyMode::Literal)).size() == 0, "empty continued line");
+            check(YAML::Load(to_yaml("\\\n\n")).size() == 0, "empty continued line");
         }},
         {"empty continuation followed by comment is ignored like Java", [] {
-            check(YAML::Load(to_yaml("\\\n  #x\n", KeyMode::Literal)).size() == 0, "continued comment");
+            check(YAML::Load(to_yaml("\\\n  #x\n")).size() == 0, "continued comment");
         }},
-        {"special characters and multiline round trip", [] {
+        {"special characters and multiline decoded text are retained", [] {
             const std::string input = "' #key:=!': \" leading \\tline\\nnext\\r\\\\tail \"\n";
-            auto result = YAML::Load(to_yaml(to_properties(input), KeyMode::Literal));
-            check(result[" #key:=!"].Scalar() == " leading \tline\nnext\r\\tail ", "escaping");
+            check(to_yaml(to_properties(input)) ==
+                  " #key:=!: \" leading \\tline\\nnext\\r\\\\tail \"\n", "escaping");
         }},
         {"duplicate properties keys rejected", [] { rejects([] { to_yaml("a=1\na=2\n"); }, "Duplicate"); }},
         {"escaped duplicate keys rejected", [] { rejects([] { to_yaml("a=1\n\\u0061=2\n"); }, "Duplicate"); }},
@@ -102,12 +216,13 @@ int main() {
             check(n["logbook"]["predicate"]["exclude"][0]["path"].Scalar() == "/api/**", "array path");
             check(n["custom"]["logging"]["level"]["com"]["example"].Scalar() == "trace", "exact prefix only");
         }},
-        {"full literal mode takes precedence over logger grouping", [] {
+        {"logger grouping always preserves complete logger names", [] {
             const std::string props = "logging.level.com.example=info\nlogging.level.com.example.Mapper=off\n";
-            auto yaml = to_yaml(props, KeyMode::Literal);
+            auto yaml = to_yaml(props);
             auto n = YAML::Load(yaml);
-            check(n["logging.level.com.example"].Scalar() == "info", "full literal key");
-            check(to_properties(yaml, KeyMode::Literal) == props, "full literal round trip");
+            check(n["logging"]["level"]["com.example"].Scalar() == "info", "package logger");
+            check(n["logging"]["level"]["com.example.Mapper"].Scalar() == "off", "class logger");
+            check(to_properties(yaml) == props, "logger round trip");
         }},
         {"logger grouping still rejects namespace conflicts and empty logger names", [] {
             rejects([] { to_yaml("logging.level=info\nlogging.level.com.example=off\n"); }, "conflict");
@@ -122,21 +237,22 @@ int main() {
         {"dotted and nested paths colliding are rejected", [] {
             rejects([] { to_properties("a.b: x\na: {b: y}\n"); }, "Duplicate flattened key");
         }},
-        {"special mapping keys round trip under nested mappings", [] {
+        {"special mapping keys retain parsed spelling under nested mappings", [] {
             const std::vector<std::string> keys = {"a b", "a:b", "a=b", "#tag", "!flag", "/api/*", "a\\b",
                 "name[prod]", "tag[prod.eu]", "[all]", "[0]", "a[]", "unmatched[", "unmatched]", "version@1+$%^&()", "中文-key_name"};
             YAML::Emitter out;
             out << YAML::BeginMap << YAML::Key << "root" << YAML::Value << YAML::BeginMap;
             for (const auto& key : keys) out << YAML::Key << YAML::DoubleQuoted << key << YAML::Value << "text";
             out << YAML::EndMap << YAML::EndMap;
-            auto restored = YAML::Load(to_yaml(to_properties(out.c_str())));
-            for (const auto& key : keys) check(restored["root"][key].Scalar() == "text", key.c_str());
+            std::string expected = "root:\n";
+            for (const auto& key : keys) expected += "  " + key + ": text\n";
+            check(to_yaml(to_properties(out.c_str())) == expected, "special nested key text");
         }},
         {"symbol keys and real array indices coexist", [] {
             auto n = YAML::Load(to_yaml("group[prod][0].a\\:b=x\ngroup[prod][1].a\\:b=y\n"));
             check(n["group[prod]"].IsSequence() && n["group[prod]"][1]["a:b"].Scalar() == "y", "array alongside symbols");
         }},
-        {"literal mode rejects nesting", [] { rejects([] { to_properties("a: {b: x}\n", KeyMode::Literal); }, "flat"); }},
+        {"nested YAML always flattens", [] { check(to_properties("a: {b: x}\n") == "a.b=x\n", "nested mapping"); }},
         {"null is not silently converted to empty", [] { rejects([] { to_properties("a: null\n"); }, "Null"); }},
         {"empty containers are not silently dropped", [] { rejects([] { to_properties("a: []\n"); }, "Empty"); }},
         {"multiple YAML documents rejected", [] { rejects([] { to_properties("a: x\n---\nb: y\n"); }, "single"); }},
@@ -159,9 +275,9 @@ int main() {
         {"custom YAML tags rejected", [] { rejects([] { to_properties("a: !custom x\n"); }, "tag"); }},
         {"root sequence rejected", [] { rejects([] { to_properties("- x\n"); }, "mapping"); }},
         {"empty path segments rejected", [] { rejects([] { to_yaml("a..b=x\n"); }, "path"); }},
-        {"empty literal key is preserved", [] {
-            auto n = YAML::Load(to_yaml("=x\n", KeyMode::Literal));
-            check(n[""].Scalar() == "x", "empty key");
+        {"empty keys reject with line numbers and no removed-mode suggestion", [] {
+            rejects([] { to_yaml("=x\n"); }, "Empty property key has no hierarchical path. (line 1)");
+            rejects([] { to_properties("\"\": x\n"); }, "Empty YAML key has no hierarchical path. (line 1)");
         }},
         {"depth bound enforced", [] {
             std::string key = "a"; for (int i=0; i<70; ++i) key += ".a";
@@ -176,7 +292,7 @@ int main() {
             check(r.output_format == yp::Format::Yaml && YAML::Load(r.text)["url"].Scalar() == "https://example.com", "auto Properties");
         }},
         {"auto file hint resolves colon-only properties", [] {
-            auto r = yp::auto_convert("key: value\n", KeyMode::Hierarchical, yp::Format::Properties);
+            auto r = yp::auto_convert("key: value\n", yp::Format::Properties);
             check(r.output_format == yp::Format::Yaml && YAML::Load(r.text)["key"].Scalar() == "value", "Properties hint");
         }},
         {"auto ambiguous unsaved colon text defaults to YAML", [] {
@@ -193,9 +309,9 @@ int main() {
         {"auto malformed YAML is not retried as Properties", [] {
             rejects([] { yp::auto_convert("a: [\n"); }, "line");
         }},
-        {"auto preserves literal-key option", [] {
-            auto r = yp::auto_convert("a.b=x\n", KeyMode::Literal);
-            check(YAML::Load(r.text)["a.b"].Scalar() == "x", "literal auto");
+        {"auto always expands dotted keys", [] {
+            auto r = yp::auto_convert("a.b=x\n");
+            check(YAML::Load(r.text)["a"]["b"].Scalar() == "x", "hierarchical auto");
         }},
         {"auto empty input requests explicit direction", [] {
             rejects([] { yp::auto_convert("# comment\n"); }, "detect");

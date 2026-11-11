@@ -11,10 +11,8 @@ namespace {
 constexpr wchar_t plugin_name[] = L"YamlProperties";
 constexpr std::size_t input_limit = 8 * 1024 * 1024;
 NppData npp;
-std::array<FuncItem, 7> commands;
-constexpr std::size_t literal_command = 3;
-constexpr std::size_t new_tab_command = 4;
-bool literal_keys = false;
+std::array<FuncItem, 6> commands;
+constexpr std::size_t new_tab_command = 3;
 bool new_tab = true;
 std::wstring settings_path;
 unsigned output_number = 0;
@@ -151,13 +149,12 @@ void convert(std::optional<bool> requested_direction) {
     try {
         HWND source = editor();
         auto input = read_input(source);
-        auto mode = literal_keys ? yp::KeyMode::Literal : yp::KeyMode::Hierarchical;
         bool yaml_output = requested_direction.value_or(false);
         std::string output;
         if (requested_direction) {
-            output = yaml_output ? yp::to_yaml(input, mode) : yp::to_properties(input, mode);
+            output = yaml_output ? yp::to_yaml(input) : yp::to_properties(input);
         } else {
-            auto converted = yp::auto_convert(input, mode, filename_format());
+            auto converted = yp::auto_convert(input, filename_format());
             yaml_output = converted.output_format == yp::Format::Yaml;
             output = std::move(converted.text);
         }
@@ -197,10 +194,9 @@ void yaml_to_properties() { convert(false); }
 void properties_to_yaml() { convert(true); }
 void auto_convert() { convert(std::nullopt); }
 
-bool save_settings(bool literal_value, bool new_tab_value) {
+bool save_settings(bool new_tab_value) {
     if (settings_path.empty()) return false;
-    const std::string text = std::string("[Settings]\r\nLiteralKeys=") + (literal_value ? "1\r\n" : "0\r\n") +
-                             "NewTab=" + (new_tab_value ? "1\r\n" : "0\r\n");
+    const std::string text = std::string("[Settings]\r\nNewTab=") + (new_tab_value ? "1\r\n" : "0\r\n");
     auto temp = settings_path + L".tmp." + std::to_wstring(GetCurrentProcessId());
     HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) return false;
@@ -212,16 +208,8 @@ bool save_settings(bool literal_value, bool new_tab_value) {
     if (!ok) DeleteFileW(temp.c_str());
     return ok;
 }
-void toggle_literal() {
-    if (!save_settings(!literal_keys, new_tab)) {
-        report("Could not save settings to the Notepad++ plugin configuration directory. The mode was not changed.");
-        return;
-    }
-    literal_keys = !literal_keys;
-    SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[literal_command]._cmdID, literal_keys);
-}
 void toggle_new_tab() {
-    if (!save_settings(literal_keys, !new_tab)) {
+    if (!save_settings(!new_tab)) {
         report("Could not save settings to the Notepad++ plugin configuration directory. The output mode was not changed.");
         return;
     }
@@ -233,12 +221,13 @@ void about() {
         L"YamlProperties " YP_VERSION_W L" (" YP_ARCH_W L")\n\n"
         L"默认在新标签页打开结果，保留原文。\n"
         L"取消勾选后替换选区或全文，可一次撤销；设置自动记忆。\n"
-        L"默认：点号表示层级，[0] 表示数组下标。\n"
-        L"保留完整键名：将点号和方括号作为普通字符。\n\n"
+        L"点号表示层级，[0] 表示数组下标。\n\n"
         L"自动转换：优先识别扩展名，再按内容判断方向。\n"
         L"无扩展名的 key: value 默认视为 YAML。\n"
         L"支持带点键；logging.level 下保留完整日志名称，其余按点号展开。\n\n"
-        L"YAML 输出值均为字符串。注释、类型和原始排版不保留。\n"
+        L"默认保留 Properties 中已有的引号，不自动添加引号。\n"
+        L"未加引号的值由 YAML 读取器识别类型。\n"
+        L"注释和原始排版不保留。\n"
         L"null、空容器、重复键和冲突路径会报错。\n"
         L"新标签页输出为 UTF-8；原位替换保持原编码。\n\n"
         L"转换在本机完成，无网络请求。\n"
@@ -254,16 +243,14 @@ extern "C" __declspec(dllexport) void setInfo(NppData data) {
         if (path.front()) {
             CreateDirectoryW(path.data(), nullptr);
             settings_path = std::wstring(path.data()) + L"\\YamlProperties.ini";
-            literal_keys = GetPrivateProfileIntW(L"Settings", L"LiteralKeys", 0, settings_path.c_str()) != 0;
             new_tab = GetPrivateProfileIntW(L"Settings", L"NewTab", 1, settings_path.c_str()) != 0;
         }
-        const wchar_t* names[] = {L"YAML → Properties", L"Properties → YAML", L"自动识别并转换", L"保留完整键名（不拆分点号和下标）", L"在新标签页打开转换结果", L"---", L"关于 / 转换规则"};
-        PFUNCPLUGINCMD handlers[] = {yaml_to_properties, properties_to_yaml, auto_convert, toggle_literal, toggle_new_tab, nullptr, about};
+        const wchar_t* names[] = {L"YAML → Properties", L"Properties → YAML", L"自动识别并转换", L"在新标签页打开转换结果", L"---", L"关于 / 转换规则"};
+        PFUNCPLUGINCMD handlers[] = {yaml_to_properties, properties_to_yaml, auto_convert, toggle_new_tab, nullptr, about};
         for (std::size_t i = 0; i < commands.size(); ++i) {
             lstrcpynW(commands[i]._itemName, names[i], menuItemSize);
             commands[i]._pFunc = handlers[i];
         }
-        commands[literal_command]._init2Check = literal_keys;
         commands[new_tab_command]._init2Check = new_tab;
     } catch (...) { report("Plugin initialization failed."); }
 }
@@ -274,7 +261,6 @@ extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* count) {
 }
 extern "C" __declspec(dllexport) void beNotified(SCNotification* notification) {
     if (notification && notification->nmhdr.code == NPPN_READY) {
-        SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[literal_command]._cmdID, literal_keys);
         SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[new_tab_command]._cmdID, new_tab);
     }
 }

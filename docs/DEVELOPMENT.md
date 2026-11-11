@@ -59,7 +59,6 @@ python tests\release_test.py
 ```cmd
 build\ypconvert.exe to-properties < application.yaml > application.properties
 build\ypconvert.exe to-yaml < application.properties > application.yaml
-build\ypconvert.exe to-yaml --literal < flat.properties > flat.yaml
 ```
 
 ## 代码导航

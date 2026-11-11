@@ -121,7 +121,7 @@ def main():
     shutil.copy2(DIST / 'YamlProperties/YamlProperties.dll', destination / 'YamlProperties.dll')
     config = RUNTIME / 'plugins/config/YamlProperties.ini'
     config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text('[Settings]\nLiteralKeys=0\n', encoding='ascii')
+    config.write_text('[Settings]\nLiteralKeys=1\nQuoteAll=1\n', encoding='ascii')
     initial = 'server:\n  port: 8080\nname: 中文\nservers: [localhost, example.com]\n'
     fixture = RUNTIME / 'sample.yaml'
     fixture.write_bytes(initial.encode('utf-8'))
@@ -152,6 +152,9 @@ def main():
         assert output_toggle is not None, 'Missing configurable output menu'
         assert u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
         passed('old configuration defaults to checked new-tab output')
+        assert '键和值始终加双引号' not in commands
+        assert '保留完整键名（不拆分点号和下标）' not in commands
+        passed('removed menus are absent even with legacy enabled settings')
         start_index = send(hwnd, 2024+23, 0, 0)
         tabs = send(hwnd, 2024+7, 0, 0)
         send(hwnd, 0x111, commands['YAML → Properties'])
@@ -166,8 +169,8 @@ def main():
         send(hwnd, 2024+28, 0, props_index)
         send(hwnd, 0x111, commands['Properties → YAML'])
         yaml = read(sci)
-        assert '"8080"' in yaml and '"中文"' in yaml and '"localhost"' in yaml
-        passed('Properties menu emits quoted YAML values', output=yaml)
+        assert 'port: 8080' in yaml and 'name: 中文' in yaml and '- localhost' in yaml
+        passed('Properties menu leaves originally unquoted values unquoted', output=yaml)
         send(hwnd, 2024+28, 0, start_index)
         begin = len(initial[:initial.index('name:')].encode('utf-8'))
         end = begin + len('name: 中文\n'.encode('utf-8'))
@@ -196,28 +199,34 @@ def main():
         passed('optional auto command detects YAML filename', output=read(sci))
         send(hwnd, 0x111, commands['自动识别并转换'])
         logger_result = read(sci).replace('\r\n', '\n')
-        assert logger_result == ('"logging":\n  "level":\n'
-                                 '    "com.example": "off"\n'
-                                 '    "com.example.dao.Mapper": "debug"\n'
-                                 '    "org.example": "debug"\n'), repr(logger_result)
+        assert logger_result == ('logging:\n  level:\n'
+                                 '    com.example: off\n'
+                                 '    com.example.dao.Mapper: debug\n'
+                                 '    org.example: debug\n'), repr(logger_result)
         passed('auto command detects generated Properties tab', output=logger_result)
         open_fixture('colon.properties', 'key: value\n')
         send(hwnd, 0x111, commands['自动识别并转换'])
-        assert read(sci) == '"key": "value"\n'
+        assert read(sci) == 'key: value\n'
         passed('Properties extension resolves ambiguous colon syntax')
+        original_quotes = 'logging.pattern.file="%d{HH:mm:ss} %m%n"\nprofile=\'${profileActive}\'\ncode=00123\nflag=off\n'
+        for command in ['Properties → YAML', '自动识别并转换']:
+            open_fixture('source-quotes.properties', original_quotes)
+            send(hwnd, 0x111, commands[command])
+            assert read(sci) == 'logging:\n  pattern:\n    file: "%d{HH:mm:ss} %m%n"\nprofile: \'${profileActive}\'\ncode: 00123\nflag: off\n'
+        passed('manual and auto conversion retain existing quotes without adding new ones', output=read(sci))
+        quoted_yaml = 'logging:\n  pattern:\n    file: "%d{HH:mm:ss} %m%n"\nprofile: "${profileActive}"\ncode: "00123"\nflag: off\ntext: "line\\nnext"\n'
+        quoted_properties = 'logging.pattern.file="%d{HH:mm:ss} %m%n"\nprofile="${profileActive}"\ncode="00123"\nflag=off\ntext="line\\\\nnext"\n'
+        for command in ['YAML → Properties', '自动识别并转换']:
+            open_fixture('quoted-values.yaml', quoted_yaml)
+            send(hwnd, 0x111, commands[command])
+            assert read(sci) == quoted_properties, repr(read(sci))
+            send(hwnd, 0x111, commands['Properties → YAML'])
+            assert read(sci) == quoted_yaml, repr(read(sci))
+        passed('manual and auto YAML conversion preserve double quotes and escapes through a round trip', output=read(sci))
         open_fixture('unknown.txt', logger_yaml)
         send(hwnd, 0x111, commands['自动识别并转换'])
         assert read(sci) == logger_properties
         passed('auto command detects content for unknown extension')
-        send(hwnd, 2024+28, 0, props_index)
-        toggle = commands['保留完整键名（不拆分点号和下标）']
-        send(hwnd, 0x111, toggle)
-        assert 'LiteralKeys=1' in config.read_text()
-        assert u.GetMenuState(u.GetMenu(hwnd), toggle, 0) & 8
-        send(hwnd, 0x111, commands['Properties → YAML'])
-        literal = read(sci)
-        assert '"server.port"' in literal and '"servers[0]"' in literal
-        passed('literal-key toggle persists and preserves full keys', output=literal)
         bad = RUNTIME / 'invalid.properties'
         bad.write_bytes(b'duplicate=1\nduplicate=2\n')
         with Remote(handle, (str(bad)+'\0').encode('utf-16le')) as memory:
@@ -239,12 +248,11 @@ def main():
         assert read(sci) == 'duplicate=1\nduplicate=2\n'
         passed('invalid input shows line number and leaves tabs/source unchanged', message=texts)
 
-        # Every output path uses the same persistent choice, independently of key mode.
-        send(hwnd, 0x111, toggle)
+        # Saving the remaining output preference drops obsolete settings.
         send(hwnd, 0x111, output_toggle)
-        assert 'LiteralKeys=0' in config.read_text() and 'NewTab=0' in config.read_text()
+        assert config.read_text() == '[Settings]\nNewTab=0\n'
         assert not u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
-        passed('output preference persists independently of literal-key preference')
+        passed('output preference persists and removes both obsolete settings')
 
         open_fixture('inplace.yaml', initial)
         tabs = send(hwnd, 2024+7)
@@ -262,7 +270,7 @@ def main():
         assert read(sci) == properties
         passed('whole-document conversion is one undo and redo action')
         send(hwnd, 0x111, commands['Properties → YAML'])
-        assert '"8080"' in read(sci) and '"中文"' in read(sci)
+        assert 'port: 8080' in read(sci) and 'name: 中文' in read(sci)
         assert send(hwnd, 2024+7) == tabs and send(hwnd, 2024+60) == buffer
         passed('reverse conversion also replaces the current document')
 
@@ -327,7 +335,7 @@ def main():
         codepage = send(sci, 2137)
         buffer, tabs = send(hwnd, 2024+60), send(hwnd, 2024+7)
         send(hwnd, 0x111, commands['Properties → YAML'])
-        assert read(sci, 'utf-8' if codepage == 65001 else 'gbk') == '"name": "中文"\n'
+        assert read(sci, 'utf-8' if codepage == 65001 else 'gbk') == 'name: 中文\n'
         assert send(sci, 2137) == codepage and send(hwnd, 2024+60) == buffer
         assert send(hwnd, 2024+7) == tabs
         send(sci, 2176)
@@ -354,9 +362,8 @@ def main():
         finally:
             blocked_temp.rmdir()
 
-        send(hwnd, 0x111, toggle)
-        assert 'LiteralKeys=1' in config.read_text() and 'NewTab=0' in config.read_text()
-        # Restart the isolated editor to verify loading both settings from disk.
+        assert config.read_text() == '[Settings]\nNewTab=0\n'
+        # Restart the isolated editor to verify loading the remaining setting from disk.
         k.CloseHandle(handle)
         handle = None
         process.terminate()
@@ -370,22 +377,22 @@ def main():
             raise C.WinError(C.get_last_error())
         sci = until(lambda: next((h for h in windows(process.pid, hwnd) if classname(h) == 'Scintilla' and read(h) == initial), None))
         output_toggle = commands['在新标签页打开转换结果']
-        toggle = commands['保留完整键名（不拆分点号和下标）']
+        assert '保留完整键名（不拆分点号和下标）' not in commands
+        assert '键和值始终加双引号' not in commands
         assert not u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
-        assert u.GetMenuState(u.GetMenu(hwnd), toggle, 0) & 8
         open_fixture('restart.properties', 'a.b=1\n')
         buffer, tabs = send(hwnd, 2024+60), send(hwnd, 2024+7)
         send(hwnd, 0x111, commands['Properties → YAML'])
-        assert read(sci) == '"a.b": "1"\n'
+        assert read(sci) == 'a:\n  b: 1\n'
         assert send(hwnd, 2024+60) == buffer and send(hwnd, 2024+7) == tabs
-        passed('both preferences and in-place behavior survive editor restart')
+        passed('output preference and fixed hierarchical conversion survive editor restart')
         send(hwnd, 0x111, output_toggle)
-        assert 'NewTab=1' in config.read_text() and 'LiteralKeys=1' in config.read_text()
+        assert config.read_text() == '[Settings]\nNewTab=1\n'
         open_fixture('restart.properties', 'a.b=1\n')
         # The open tab contains unsaved YAML from the previous conversion.
         send(hwnd, 0x111, commands['YAML → Properties'])
         assert read(sci) == 'a.b=1\n' and send(hwnd, 2024+7) == tabs+1
-        passed('reenabling new-tab output takes effect and preserves key preference')
+        passed('reenabling new-tab output takes effect with hierarchical keys')
     finally:
         if handle:
             k.CloseHandle(handle)

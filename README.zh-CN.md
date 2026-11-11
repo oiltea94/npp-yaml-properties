@@ -39,7 +39,7 @@ server.port=8080
 logging.level.com.example=off
 ```
 
-反向转换时，默认按点号展开层级；`logging.level` 下保留完整日志名称，使 `com.example` 与 `com.example.dao.Mapper` 可以并存。值输出为带引号的字符串；其他原始键名分组、注释与排版不保留。[查看转换规则 →](docs/USAGE.md#转换规则)
+反向转换时，默认按点号展开层级；`logging.level` 下保留完整日志名称，使 `com.example` 与 `com.example.dao.Mapper` 可以并存。Properties 中原本有引号的就保留为 YAML 引号，原本没有的也不添加，包括 `00123`、`true`、`off`。YAML 值原本带双引号，转为 Properties 后也保留，例如 `name: "demo"` → `name="demo"`。其中的 YAML 转义写法经过 Java Properties 转义后保留；跨行双引号值整理为带双引号的单行值。其他原始键名分组、注释与排版不保留。[查看转换规则 →](docs/USAGE.md#转换规则)
 
 ## 安装
 
@@ -72,9 +72,8 @@ Notepad++/plugins/YamlProperties/YamlProperties.dll
 | 菜单选项 | 作用 |
 |---|---|
 | 在新标签页打开转换结果 | 默认开启；关闭后原位替换，按 **Ctrl+Z** 可一次撤销转换文本 |
-| 保留完整键名 | 默认关闭；开启后将 `server.port` 等键名作为整体，适用于扁平配置 |
 
-两个选项都会在重启后保留。自动识别优先使用文件扩展名；遇到格式歧义时使用手动转换命令。
+输出位置选项会在重启后保留。自动识别优先使用文件扩展名；遇到格式歧义时使用手动转换命令。
 
 ## 文档与参与
 
