@@ -34,8 +34,10 @@ def main():
     with zipfile.ZipFile(binary, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         archive.write(dll, manifest['file'])
         archive.write(DIST/'manifest.json', 'manifest.json')
-        for name in ['README.md', 'CHANGELOG.md', 'docs/RELEASING.md', 'install.ps1', 'LICENSE', 'THIRD_PARTY.md']:
+        for name in ['README.md', 'CHANGELOG.md', 'install.ps1', 'LICENSE', 'THIRD_PARTY.md']:
             archive.write(ROOT/name, name)
+        for file in sorted((ROOT/'docs').glob('*.md')):
+            archive.write(file, file.relative_to(ROOT))
         for file in notice.iterdir():
             archive.write(file, Path('licenses')/file.name)
         archive.write(source, Path('source')/source.name)
