@@ -16,7 +16,7 @@
 
 ## 0.2.0
 
-- Accept dotted and special YAML keys, including `logging.level.com.his`.
+- Accept dotted and special YAML keys, including `logging.level.com.example`.
 - Add optional automatic format detection and conversion.
 
 ## 0.1.0

@@ -76,11 +76,11 @@ int main() {
         {"invalid array syntax rejected", [] { rejects([] { to_yaml("a[-1]=x\n"); }, "index"); }},
         {"leading zero indices rejected", [] { rejects([] { to_yaml("a[00]=x\n"); }, "index"); }},
         {"dotted logger names flatten in default mode", [] {
-            check(to_properties("logging:\n  level:\n    com.his: off\n    com.emr: debug\n") ==
-                  "logging.level.com.his=off\nlogging.level.com.emr=debug\n", "logger names");
+            check(to_properties("logging:\n  level:\n    com.example: off\n    org.example: debug\n") ==
+                  "logging.level.com.example=off\nlogging.level.org.example=debug\n", "logger names");
         }},
         {"dotted keys normalize while preserving property values", [] {
-            const std::string props = "logging.level.com.his=off\nlogging.level.com.emr=debug\n";
+            const std::string props = "logging.level.com.example=off\nlogging.level.org.example=debug\n";
             check(to_properties(to_yaml(props)) == props, "normalized round trip");
             check(to_properties("a.b: x\n") == "a.b=x\n", "root dotted key");
         }},
@@ -133,8 +133,8 @@ int main() {
             rejects([&] { to_yaml(key + "=x\n"); }, "depth");
         }},
         {"auto detects YAML with dotted keys", [] {
-            auto r = yp::auto_convert("logging:\n  level:\n    com.his: off\n");
-            check(r.output_format == yp::Format::Properties && r.text == "logging.level.com.his=off\n", "auto YAML");
+            auto r = yp::auto_convert("logging:\n  level:\n    com.example: off\n");
+            check(r.output_format == yp::Format::Properties && r.text == "logging.level.com.example=off\n", "auto YAML");
         }},
         {"auto detects Properties and ignores URL colons", [] {
             auto r = yp::auto_convert("# header\n! comment\nurl=https://example.com\n");

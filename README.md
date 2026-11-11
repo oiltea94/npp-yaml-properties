@@ -17,7 +17,7 @@
 
 - **双向转换**：YAML ↔ Properties，也可自动识别格式。
 - **按需转换**：处理选区或全文，结果可新开标签页或原位替换。
-- **支持特殊键名**：处理 `com.his`、中文、空格与转义字符。
+- **支持特殊键名**：处理 `com.example`、中文、空格与转义字符。
 - **本地运行**：原生 x64 插件，转换过程无需联网。
 
 ## 转换示例
@@ -29,12 +29,12 @@ server:
   port: 8080
 logging:
   level:
-    com.his: off
+    com.example: off
 ```
 
 ```properties
 server.port=8080
-logging.level.com.his=off
+logging.level.com.example=off
 ```
 
 反向转换时，默认按点号展开层级，值输出为带引号的字符串；原始键名分组、注释与排版不保留。[查看转换规则 →](docs/USAGE.md#转换规则)

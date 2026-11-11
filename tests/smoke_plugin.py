@@ -180,8 +180,8 @@ def main():
                 path.write_bytes(content)
             with Remote(handle, (str(path)+'\0').encode('utf-16le')) as memory:
                 send(hwnd, 2024+77, 0, memory.address)
-        logger_yaml = 'logging:\n  level:\n    com.his: off\n    com.emr: debug\n'
-        logger_properties = 'logging.level.com.his=off\nlogging.level.com.emr=debug\n'
+        logger_yaml = 'logging:\n  level:\n    com.example: off\n    org.example: debug\n'
+        logger_properties = 'logging.level.com.example=off\nlogging.level.org.example=debug\n'
         open_fixture('logging.yaml', logger_yaml)
         send(hwnd, 0x111, commands['YAML → Properties'])
         assert read(sci) == logger_properties
