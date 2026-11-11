@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Preserve complete logger names beneath `logging.level` when converting Properties to YAML, so package and class log levels coexist without a path conflict.
+
 ## 0.3.1 — 2026-11-11
 
 - Make the default README English and add a linked Simplified Chinese README.

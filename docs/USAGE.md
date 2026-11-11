@@ -79,6 +79,24 @@ code=00123
 
 YAML 中的 `com.example` 等带点键可以展开为 Properties。反向转换默认按点号展开层级；Properties 不记录点号原先属于键名还是层级，因此不保证恢复原来的键名分组。`off` 保留为字符串，不转换为布尔值。
 
+`logging.level.` 是特例：该前缀后面的完整包名或类名作为一个键，保留大小写和点号，允许父包和具体类分别配置日志级别。例如：
+
+```properties
+logging.level.com.example=debug
+logging.level.com.example.dao.Mapper=off
+```
+
+转换为：
+
+```yaml
+"logging":
+  "level":
+    "com.example": "debug"
+    "com.example.dao.Mapper": "off"
+```
+
+其他配置继续展开层级和数组。`a=1` 与 `a.b=2` 等普通父子冲突仍报错；`logging.level=info` 与具体日志名称同时出现也会报错。完整键名模式仍将整个 `logging.level.com.example` 作为一个键。
+
 ## 转换规则
 
 - **字符串值**：Properties 的值全部是字符串，YAML 输出明确加双引号，保留 `00123`、`true`、日期等文本，不自动猜类型。

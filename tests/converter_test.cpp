@@ -79,6 +79,41 @@ int main() {
             check(to_properties("logging:\n  level:\n    com.example: off\n    org.example: debug\n") ==
                   "logging.level.com.example=off\nlogging.level.org.example=debug\n", "logger names");
         }},
+        {"logger packages and classes coexist in either input order", [] {
+            const std::string parent = "logging.level.com.example=debug\n";
+            const std::string child = "logging.level.com.example.dao.Mapper=off\n";
+            for (const auto& props : {parent + child, child + parent}) {
+                auto yaml = to_yaml(props);
+                auto level = YAML::Load(yaml)["logging"]["level"];
+                check(level.size() == 2, "two independent logger names");
+                check(level["com.example"].Scalar() == "debug", "package level");
+                check(level["com.example.dao.Mapper"].Scalar() == "off", "class level");
+                check(to_properties(yaml) == props, "logger order and values round trip");
+            }
+        }},
+        {"logger names are literal only beneath the exact logging level prefix", [] {
+            auto n = YAML::Load(to_yaml("logging.level.root=info\nlogging.level.com.example=off\n"
+                                       "logging.logback.rollingpolicy.max-history=180\n"
+                                       "logbook.predicate.exclude[0].path=/api/**\n"
+                                       "custom.logging.level.com.example=trace\n"));
+            check(n["logging"]["level"]["root"].Scalar() == "info", "root logger");
+            check(n["logging"]["level"]["com.example"].Scalar() == "off", "literal logger");
+            check(n["logging"]["logback"]["rollingpolicy"]["max-history"].Scalar() == "180", "ordinary paths");
+            check(n["logbook"]["predicate"]["exclude"][0]["path"].Scalar() == "/api/**", "array path");
+            check(n["custom"]["logging"]["level"]["com"]["example"].Scalar() == "trace", "exact prefix only");
+        }},
+        {"full literal mode takes precedence over logger grouping", [] {
+            const std::string props = "logging.level.com.example=info\nlogging.level.com.example.Mapper=off\n";
+            auto yaml = to_yaml(props, KeyMode::Literal);
+            auto n = YAML::Load(yaml);
+            check(n["logging.level.com.example"].Scalar() == "info", "full literal key");
+            check(to_properties(yaml, KeyMode::Literal) == props, "full literal round trip");
+        }},
+        {"logger grouping still rejects namespace conflicts and empty logger names", [] {
+            rejects([] { to_yaml("logging.level=info\nlogging.level.com.example=off\n"); }, "conflict");
+            rejects([] { to_yaml("logging.level.com.example=off\nlogging.level=info\n"); }, "conflict");
+            rejects([] { to_yaml("logging.level.=off\n"); }, "Invalid path");
+        }},
         {"dotted keys normalize while preserving property values", [] {
             const std::string props = "logging.level.com.example=off\nlogging.level.org.example=debug\n";
             check(to_properties(to_yaml(props)) == props, "normalized round trip");

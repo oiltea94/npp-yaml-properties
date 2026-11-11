@@ -39,7 +39,7 @@ server.port=8080
 logging.level.com.example=off
 ```
 
-反向转换时，默认按点号展开层级，值输出为带引号的字符串；原始键名分组、注释与排版不保留。[查看转换规则 →](docs/USAGE.md#转换规则)
+反向转换时，默认按点号展开层级；`logging.level` 下保留完整日志名称，使 `com.example` 与 `com.example.dao.Mapper` 可以并存。值输出为带引号的字符串；其他原始键名分组、注释与排版不保留。[查看转换规则 →](docs/USAGE.md#转换规则)
 
 ## 安装
 

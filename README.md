@@ -39,7 +39,7 @@ server.port=8080
 logging.level.com.example=off
 ```
 
-When converting back, dots expand into nested keys by default, and values are emitted as quoted strings. Original key grouping, comments, and formatting are not preserved. [Conversion rules (中文) →](docs/USAGE.md#转换规则)
+When converting back, dots expand into nested keys by default, except that logger names beneath `logging.level` remain complete keys (for example, `com.example` and `com.example.dao.Mapper` can coexist). Values are emitted as quoted strings. Other original key grouping, comments, and formatting are not preserved. [Conversion rules (中文) →](docs/USAGE.md#转换规则)
 
 ## Installation
 

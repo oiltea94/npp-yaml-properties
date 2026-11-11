@@ -174,6 +174,14 @@ struct Part { bool index = false; std::string key; std::size_t number = 0; };
 std::vector<Part> parse_path(const Property& property, KeyMode mode) {
     if (mode == KeyMode::Literal) return {{false, property.key, 0}};
     const auto& key = property.key;
+    // Spring Boot logger names are map keys, not nested property paths.
+    // A package and one of its classes can each have their own level.
+    constexpr std::string_view logger_prefix = "logging.level.";
+    if (key.compare(0, logger_prefix.size(), logger_prefix) == 0) {
+        if (key.size() == logger_prefix.size()) fail("Invalid path: " + key, property.line);
+        return {{false, "logging", 0}, {false, "level", 0},
+                {false, key.substr(logger_prefix.size()), 0}};
+    }
     std::vector<Part> result;
     std::size_t i = 0;
     while (i < key.size()) {
