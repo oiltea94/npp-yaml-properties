@@ -1,4 +1,4 @@
-# YamlProperties 0.4.0
+# YamlProperties 0.5.0
 
 ## Objective and accepted behavior
 Native Windows x86, x64 and ARM64 Notepad++ plugin with YAML → Properties, Properties → YAML and optional automatic conversion menu commands. Convert a single selection when present, otherwise the active document. By default, open the result in a new UTF-8 tab and preserve the source document. A persistent checked menu item controls this behavior; when unchecked, replace only the selected range or the whole document in place, with one undo action and no automatic save. Dotted keys and zero-based bracket indices always form nested mappings and sequences, except for complete logger names beneath logging.level. YAML output retains existing Properties quotes as syntax without adding new quotes. This behavior is fixed and has no configuration toggle.
