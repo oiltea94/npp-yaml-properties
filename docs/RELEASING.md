@@ -70,6 +70,31 @@ git push -u origin main
 
 发布任务使用 GitHub 自动提供的 `GITHUB_TOKEN`，只给该任务 `contents: write` 权限，无需配置个人访问令牌。任一构建或汇总检查失败，发布任务就不会执行。在 Actions 下载 `release-assets` 可查看准备发布的附件，`release-notes` 保存发布说明。
 
+### 自动提交官方目录 PR（一次性配置）
+
+Release 成功发布后，工作流自动调用 `.github/workflows/catalog.yml`，下载公开的三架构 Plugins Admin 包及校验文件，核对 ZIP/DLL 哈希、DLL 架构、目录格式，然后更新 `oiltea94/nppPluginList` 分支并向 `notepad-plus-plus/nppPluginList` 提交 PR。
+
+- 当前有未合并的 YamlProperties PR：更新原分支和 PR，兼容现有 `add-yamlproperties-x64` 分支。
+- 上次 PR 已合并或关闭：创建 `yamlproperties-v版本号` 分支和新 PR。
+- 官方目录已与该版本一致：不重复创建 PR。
+- 旧版本重试不会覆盖目录或未合并 PR 中的新版本；已发布版本的 ZIP 哈希发生变化也会停止。
+
+**跨仓库提交需额外配置 Secret；发布当前仓库的 Release 仍使用内置令牌。**
+
+1. 使用 `oiltea94` 账号创建 GitHub **Personal access token (classic)**，权限选择 `public_repo`，设置合适的有效期。该令牌用于推送公开的 fork 并向官方公开仓库创建或更新 PR。
+2. 打开本项目 GitHub 的 **Settings → Secrets and variables → Actions → New repository secret**。
+3. 名称填写 **`NPP_PLUGIN_LIST_TOKEN`**，值填写该令牌。不要把令牌写进源码、PR、Issue 或聊天。
+
+也可以在本机终端执行下面的命令，按提示输入令牌：
+
+```powershell
+gh secret set NPP_PLUGIN_LIST_TOKEN --repo oiltea94/npp-yaml-properties
+```
+
+未配置 Secret 时，Release 仍然发布成功，后续目录任务会明确报错。配置完成后，进入 **Actions → Submit official plugin catalog PR → Run workflow**，填写已发布的标签并取消勾选 **dry_run**，即可补交官方 PR，无需重新打包或发布。保留 **dry_run** 勾选则只验证和生成提案，不修改任何 GitHub 分支或 PR；提案保存在 `official-catalog-proposal` 附件中。
+
+PR 仍由官方维护者审核，自动提交不会自动合并。自动化也不替代 Plugins Admin 的搜索、安装、卸载、更新识别测试；PR 中会保留这一验证范围说明。最低实测 Notepad++ 文件版本当前为 `8.9.6.4`，更换测试宿主后需同步检查脚本中的兼容性设置。
+
 下面的命令用于本地开发和排障，日常发布无需在本机重复执行：
 
 ```powershell

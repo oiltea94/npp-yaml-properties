@@ -1,0 +1,72 @@
+name: Submit official plugin catalog PR
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      dry_run:
+        type: boolean
+        default: false
+    secrets:
+      NPP_PLUGIN_LIST_TOKEN:
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag (for example v0.4.1)
+        required: true
+        type: string
+      dry_run:
+        description: Validate and prepare files without changing the fork or PR
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yamlproperties-official-catalog
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install catalog schema validator
+        run: python -m pip install jsonschema==4.23.0
+      - name: Validate credentials for submission
+        if: ${{ !inputs.dry_run }}
+        env:
+          CATALOG_TOKEN: ${{ secrets.NPP_PLUGIN_LIST_TOKEN }}
+        run: |
+          if [ -z "$CATALOG_TOKEN" ]; then
+            echo '::error::Add the NPP_PLUGIN_LIST_TOKEN repository Actions secret. Use a token allowed to push oiltea94/nppPluginList and open PRs in notepad-plus-plus/nppPluginList. Then rerun this workflow for the published tag; the release does not need rebuilding.'
+            exit 1
+          fi
+      - name: Verify published assets and update catalog PR
+        env:
+          GH_TOKEN: ${{ secrets.NPP_PLUGIN_LIST_TOKEN || github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          args=(--tag "$RELEASE_TAG" --output catalog-output)
+          if [ "$DRY_RUN" != 'true' ]; then
+            args+=(--submit)
+          fi
+          python scripts/catalog_pr.py "${args[@]}"
+      - name: Save catalog validation and proposed PR
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: official-catalog-proposal
+          path: catalog-output/
+          if-no-files-found: ignore

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Update or create the official Notepad++ plugin-list PR automatically after release publication, with public asset verification and a manual dry-run/retry workflow.
 - Publish GitHub Releases automatically on version-tag pushes after all three architecture builds and package checks pass.
 
 ## 0.4.0 — 2026-11-11

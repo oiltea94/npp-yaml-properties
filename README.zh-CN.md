@@ -84,6 +84,8 @@ Notepad++/plugins/YamlProperties/YamlProperties.dll
 
 正式版本通过 GitHub Actions 自动构建和发布：推送版本标签后，完成 x86、x64、ARM64 编译及测试，再自动上传验证后的安装包到 GitHub Releases。详见[发布指南](docs/RELEASING.md)。
 
+发布完成后，Actions 会更新尚未合并的官方目录 PR，或在上次 PR 合并后新建 PR。跨仓库提交需一次性配置仓库 Secret `NPP_PLUGIN_LIST_TOKEN`；配置与手动重试步骤见发布指南，最终仍需官方维护者审核。
+
 ---
 
 [GPL-3.0-or-later](LICENSE) · [第三方许可](THIRD_PARTY.md)

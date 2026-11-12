@@ -88,6 +88,8 @@ The detailed guides below are in Chinese:
 
 Release builds run entirely in GitHub Actions: pushing a version tag builds and tests x86, x64 and ARM64, then publishes the verified packages to GitHub Releases. See the [release guide](docs/RELEASING.md).
 
+After publication, Actions updates the open official plugin-list PR or creates a new one if the previous PR was merged. Configure the `NPP_PLUGIN_LIST_TOKEN` repository secret once for cross-repository submissions; the release guide includes setup and manual retry instructions. Official maintainer approval is still required.
+
 ---
 
 [GPL-3.0-or-later](LICENSE) · [Third-party licenses](THIRD_PARTY.md)
