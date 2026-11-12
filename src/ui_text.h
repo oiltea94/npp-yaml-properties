@@ -27,7 +27,8 @@ inline constexpr UiText english_ui = {
     L"Nulls, empty containers, duplicate keys and conflicting paths produce errors.\n"
     L"New tabs use UTF-8; in-place replacement preserves the document encoding.\n\n"
     L"Conversion runs locally without network requests.\n"
-    L"YAML parser: yaml-cpp 0.8.0 (MIT).",
+    L"YAML parser: yaml-cpp 0.8.0 (MIT).\n\n"
+    L"Project homepage (GitHub):\nhttps://github.com/oiltea94/npp-yaml-properties",
     "Could not save settings to the Notepad++ plugin configuration directory. The output mode was not changed.",
     "Could not save settings to the Notepad++ plugin configuration directory. The sorting mode was not changed."
 };
@@ -49,7 +50,8 @@ inline constexpr UiText simplified_chinese_ui = {
     L"null、空容器、重复键和冲突路径会报错。\n"
     L"新标签页输出为 UTF-8；原位替换保持原编码。\n\n"
     L"转换在本机完成，无网络请求。\n"
-    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。",
+    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。\n\n"
+    L"项目主页（GitHub）：\nhttps://github.com/oiltea94/npp-yaml-properties",
     "未能将设置保存到 Notepad++ 插件配置目录。输出方式未更改。",
     "未能将设置保存到 Notepad++ 插件配置目录。排序方式未更改。"
 };
@@ -71,7 +73,8 @@ inline constexpr UiText traditional_chinese_ui = {
     L"null、空容器、重複鍵和衝突路徑會報錯。\n"
     L"新分頁輸出為 UTF-8；原位取代保持原編碼。\n\n"
     L"轉換在本機完成，無網路請求。\n"
-    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。",
+    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。\n\n"
+    L"專案首頁（GitHub）：\nhttps://github.com/oiltea94/npp-yaml-properties",
     "未能將設定儲存至 Notepad++ 外掛設定目錄。輸出方式未變更。",
     "未能將設定儲存至 Notepad++ 外掛設定目錄。排序方式未變更。"
 };
