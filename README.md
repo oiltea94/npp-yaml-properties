@@ -86,6 +86,8 @@ The detailed guides below are in Chinese:
 
 [Issues](https://github.com/oiltea94/npp-yaml-properties/issues) and pull requests are welcome. When reporting a conversion problem, include a minimal input sample, the expected result, and your Notepad++ version. Remove real passwords and other sensitive configuration values from samples.
 
+Release builds run entirely in GitHub Actions: pushing a version tag builds and tests x86, x64 and ARM64, then publishes the verified packages to GitHub Releases. See the [release guide](docs/RELEASING.md).
+
 ---
 
 [GPL-3.0-or-later](LICENSE) · [Third-party licenses](THIRD_PARTY.md)

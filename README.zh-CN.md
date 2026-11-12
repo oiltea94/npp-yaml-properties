@@ -82,6 +82,8 @@ Notepad++/plugins/YamlProperties/YamlProperties.dll
 
 欢迎提交 [Issue](https://github.com/oiltea94/npp-yaml-properties/issues) 或 Pull Request。报告转换问题时，请附上最小输入样例、预期结果和 Notepad++ 版本，并移除真实密码等配置值。
 
+正式版本通过 GitHub Actions 自动构建和发布：推送版本标签后，完成 x86、x64、ARM64 编译及测试，再自动上传验证后的安装包到 GitHub Releases。详见[发布指南](docs/RELEASING.md)。
+
 ---
 
 [GPL-3.0-or-later](LICENSE) · [第三方许可](THIRD_PARTY.md)

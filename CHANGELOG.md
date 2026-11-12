@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Publish GitHub Releases automatically on version-tag pushes after all three architecture builds and package checks pass.
+
 ## 0.4.0 — 2026-11-11
 
 - Add an optional, persistent sort-keys menu toggle, off by default. Sort sibling mapping keys in both conversion directions while preserving array element order and quote handling.

@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -58,6 +62,8 @@ jobs:
         run: python tests/limits_test.py
       - name: Test plugin-list metadata generation
         run: python tests/plugin_list_test.py
+      - name: Test release assembly
+        run: python tests/assemble_release_test.py
       - name: Download matching portable Notepad++
         run: |
           python tests/download_npp.py
@@ -87,3 +93,55 @@ jobs:
           name: validation-records-${{ matrix.arch }}
           path: evidence/
           if-no-files-found: ignore
+
+  assemble:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: YamlProperties-*-release-candidates
+          path: candidates
+      - name: Verify and assemble all release attachments
+        run: python scripts/assemble_release.py --candidates candidates --output release --notes release-notes.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+
+  publish:
+    needs: assemble
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: release
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+          path: notes
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" release/* \
+            --verify-tag --title "YamlProperties $RELEASE_TAG" \
+            --notes-file notes/release-notes.md

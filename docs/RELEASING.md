@@ -8,7 +8,7 @@
 
 ```text
 YamlProperties/
-├── .github/workflows/ci.yml   # Windows 编译、测试、打包；不自动公开发布
+├── .github/workflows/ci.yml   # Windows 三架构编译、测试、打包；版本标签自动发布
 ├── docs/RELEASING.md          # 本文
 ├── scripts/                  # 官方插件目录条目生成工具
 ├── src/                      # 转换核心、编辑器适配、DLL 版本资源
@@ -51,7 +51,26 @@ git push -u origin main
 
 以上命令适用于新建仓库。本项目分支为 `main`，`origin` 已指向 `oiltea94/npp-yaml-properties`；已有远程地址时跳过 `git remote add`，需要更换地址则使用 `git remote set-url origin $repository`。后续提交沿用 `git add`、`git commit` 和 `git push`。提交前检查暂存列表中没有本机运行环境、备份、日志或发布 ZIP。
 
-## 3. 编译、测试和发布附件
+## 3. GitHub Actions 自动发布
+
+正式发布由 `.github/workflows/ci.yml` 完成，本机无需编译或上传 ZIP。
+
+1. 修改 `VERSION`，在 `CHANGELOG.md` 中添加对应版本的非空发布记录（例如 `## 0.4.1 — 2026-11-12`），提交并推送到 `main`。
+2. 确认该版本还未发布，创建并推送与 `VERSION` 一致的标签：
+
+   ```powershell
+   $releaseVersion = (Get-Content VERSION -Raw).Trim()
+   git tag -a "v$releaseVersion" -m "Release v$releaseVersion"
+   git push origin "v$releaseVersion"
+   ```
+
+3. Actions 分别在 Windows x86、x64、原生 ARM64 环境编译、测试和打包。全部通过后，汇总并核验 10 个附件，读取该版本的更新记录，自动创建公开的 GitHub Release。
+
+普通分支推送、PR 和界面上的 **Run workflow** 只验证并保存附件，不公开发布。发布需要推送新的 `v*` 标签；已存在的版本不会覆盖。重试失败的发布时，先检查是否留下了 Release 草稿并核对其附件，再决定后续处理；不要替换已经公开的版本附件。
+
+发布任务使用 GitHub 自动提供的 `GITHUB_TOKEN`，只给该任务 `contents: write` 权限，无需配置个人访问令牌。任一构建或汇总检查失败，发布任务就不会执行。在 Actions 下载 `release-assets` 可查看准备发布的附件，`release-notes` 保存发布说明。
+
+下面的命令用于本地开发和排障，日常发布无需在本机重复执行：
 
 ```powershell
 python bootstrap.py
@@ -76,7 +95,7 @@ python tests\release_test.py
 | `YamlProperties-0.4.0-source.zip` | 对应源码、依赖、文档和构建脚本，不含本机日志 |
 | `checksums.json` | 上述各 ZIP 与 DLL 的 SHA-256；官方条目使用 plugin-admin ZIP 的值 |
 
-在 GitHub 创建正式 Release，tag 为 `v0.4.0`，选中经过验证的提交，并上传上述 ZIP 和校验文件。不要把 GitHub 自动生成的 “Source code (zip)” 当作插件安装包，也不要将 Actions 下载附件的外层 ZIP 当作 Plugins Admin ZIP。Release 说明可取自 `CHANGELOG.md`，附各架构、功能和实测宿主版本。各架构的正式附件分别上传，不覆盖已发布的旧版本。
+推送对应版本标签后，Actions 自动创建正式 Release，并上传上述 ZIP 和校验文件。不要把 GitHub 自动生成的 “Source code (zip)” 当作插件安装包，也不要将 Actions 下载附件的外层 ZIP 当作 Plugins Admin ZIP。Release 说明取自 `CHANGELOG.md` 的对应版本。各架构的正式附件分别上传，不覆盖已发布的旧版本。
 
 后续版本只改 `VERSION` 并更新变更记录，构建时同步生成关于窗口、Windows DLL 版本信息和 manifest。每次生成新版本下载 URL；已公开并提交目录的版本附件保持不变。重建的 ZIP 可能因时间戳而改变哈希，**先确定最终附件，再计算并提交条目**。
 
@@ -84,7 +103,7 @@ python tests\release_test.py
 
 x64 输出保留在 `dist/`；另外两种架构分别输出到 `dist/x86/`、`dist/arm64/`，包名中的 `x64` 换成 `x86` / `arm64`。每个架构拥有自己的 manifest 与 checksums；发布时保留各架构校验文件，避免相互覆盖。源码 ZIP 内容共用。发布前为新版本更新 `VERSION`，不要上传当前开发构建覆盖既有版本。
 
-正式发布使用对应标签 CI 的候选附件。校验文件分别命名为 `checksums-x86.json`、`checksums-x64.json` 和 `checksums-arm64.json`。三个源码 ZIP 的内容须逐文件一致；若 ZIP 时间戳导致哈希不同，选用 x64 的源码 ZIP 作为公共附件，并将三个公开校验文件中的源码项统一为该附件的实际哈希。安装包与 Plugins Admin ZIP 保持 CI 原始字节，安装包内嵌源码 ZIP 也不重打包。
+正式发布使用对应标签 CI 的候选附件，由 `scripts/assemble_release.py` 自动汇总并验证。输出共 10 个附件：3 个手动安装包、3 个 Plugins Admin 包、1 个源码包、3 个校验文件。校验文件分别命名为 `checksums-x86.json`、`checksums-x64.json` 和 `checksums-arm64.json`。三个源码 ZIP 的内容须逐文件一致；若 ZIP 时间戳导致哈希不同，选用 x64 的源码 ZIP 作为公共附件，并将三个公开校验文件中的源码项统一为该附件的实际哈希。安装包与 Plugins Admin ZIP 保持 CI 原始字节，安装包内嵌源码 ZIP 也不重打包。
 
 ## 4. 官方插件目录的硬性要求
 
