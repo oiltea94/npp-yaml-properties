@@ -93,6 +93,8 @@ gh secret set NPP_PLUGIN_LIST_TOKEN --repo oiltea94/npp-yaml-properties
 
 未配置 Secret 时，Release 仍然发布成功，后续目录任务会明确报错。配置完成后，进入 **Actions → Submit official plugin catalog PR → Run workflow**，填写已发布的标签并取消勾选 **dry_run**，即可补交官方 PR，无需重新打包或发布。保留 **dry_run** 勾选则只验证和生成提案，不修改任何 GitHub 分支或 PR；提案保存在 `official-catalog-proposal` 附件中。
 
+若出现 `401 Bad credentials`，更新 Secret 中的令牌并重试；值应仅包含完整令牌，不带引号或 `Bearer` 前缀。正式提交前会验证令牌有效性及 fork 的推送权限。演练使用当前仓库的内置令牌，因此无须配置个人令牌即可执行。
+
 PR 仍由官方维护者审核，自动提交不会自动合并。自动化也不替代 Plugins Admin 的搜索、安装、卸载、更新识别测试；PR 中会保留这一验证范围说明。最低实测 Notepad++ 文件版本当前为 `8.9.6.4`，更换测试宿主后需同步检查脚本中的兼容性设置。
 
 下面的命令用于本地开发和排障，日常发布无需在本机重复执行：
