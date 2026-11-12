@@ -81,7 +81,13 @@ def main():
     run([cxx.parent / (triple + '-windres.exe'), '-I', build,
          '-i', ROOT / 'src/plugin.rc', '-o', resource, '-O', 'coff'])
     run([cxx, *common, '-Wall', '-Wextra', '-Werror', '-shared', ROOT / 'src/plugin.cpp', resource, core, archive,
-         '-static', '-luser32', '-Wl,--no-insert-timestamp', '-o', dll])
+         '-static', '-luser32', '-lcomctl32', '-lshell32', '-Wl,--no-insert-timestamp', '-o', dll])
+    about_test = build / 'about_callback_test.exe'
+    run([cxx, *common, '-Wall', '-Wextra', '-Werror', ROOT / 'tests/about_callback_test.cpp', core, archive,
+         '-static', '-luser32', '-lcomctl32', '-lshell32', '-o', about_test])
+    about_result = 'NOT RUN: cross-compiled target.\n' if args.compile_only else run([about_test])
+    (evidence / 'about-callback-tests.txt').write_text(about_result, encoding='utf-8')
+    print(about_result, flush=True)
     run([cxx, *common, ROOT / 'src/cli.cpp', core, archive, '-static', '-o', build / 'ypconvert.exe'])
     info = run([cxx.parent / 'llvm-readobj.exe', '--coff-exports', '--coff-imports', dll])
     (evidence / 'dll-inspection.txt').write_text(info, encoding='utf-8')

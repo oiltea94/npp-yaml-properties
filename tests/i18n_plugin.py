@@ -13,6 +13,27 @@ declare(u, 'GetWindowTextW', C.c_int, W.HWND, W.LPWSTR, C.c_int)
 declare(u, 'GetDlgCtrlID', C.c_int, W.HWND)
 declare(u, 'GetParent', W.HWND, W.HWND)
 
+HOMEPAGE = 'https://github.com/oiltea94/npp-yaml-properties'
+
+
+def accessible_elements(dialog):
+    # TaskDialog body text is rendered by DirectUI rather than Static HWNDs.
+    script = r'''
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$ErrorActionPreference = 'Stop'
+$root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]DIALOG_HANDLE)
+$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+              [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object {
+    $item = $_.Current
+    [PSCustomObject]@{name=$item.Name; focusable=$item.IsKeyboardFocusable; enabled=$item.IsEnabled}
+} | ConvertTo-Json -Compress
+'''.replace('DIALOG_HANDLE', str(dialog))
+    result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
+                            capture_output=True, text=True, encoding='utf-8', timeout=20, check=True)
+    return json.loads(result.stdout)
+
 LOCALES = ['english.xml', 'chineseSimplified.xml', 'taiwaneseMandarin.xml',
            'hongKongCantonese.xml', 'french.xml']
 LABELS = {
@@ -26,6 +47,7 @@ LANGUAGE = {'english.xml': 'en', 'chineseSimplified.xml': 'zh-CN',
 DISPLAY_NAMES = {'english.xml': 'English', 'chineseSimplified.xml': '中文简体',
                  'taiwaneseMandarin.xml': '台灣繁體', 'hongKongCantonese.xml': '香港繁體', 'french.xml': 'Français'}
 SAVE_ERROR = {'en': 'Could not save settings', 'zh-CN': '未能将设置保存', 'zh-TW': '未能將設定儲存'}
+EMPTY_INPUT = {'en': 'No text to convert', 'zh-CN': '没有可转换的文本', 'zh-TW': '沒有可轉換的文字'}
 
 
 def main():
@@ -60,7 +82,7 @@ def main():
             until(lambda: 'YAML → Properties' in menus(u.GetMenu(hwnd)))
             ids = None
 
-            def dialog_body(command):
+            def dialog_body(command, check_homepage=False):
                 u.PostMessageW(hwnd, 0x111, command, 0)
                 def plugin_dialog():
                     for window in windows(process.pid):
@@ -70,16 +92,31 @@ def main():
                             return window
                     return None
                 dialog = until(plugin_dialog)
-                u.ShowWindow(dialog, 0)
+                if not check_homepage:
+                    u.ShowWindow(dialog, 0)
                 def dialog_text():
                     texts = []
                     for child in windows(process.pid, dialog):
-                        if classname(child) == 'Static':
+                        if classname(child) in ('Static', 'SysLink'):
                             text = C.create_unicode_buffer(8192)
                             u.GetWindowTextW(child, text, len(text))
                             texts.append(text.value)
                     return '\n'.join(texts).strip()
                 body = until(dialog_text)
+                if check_homepage:
+                    links = [child for child in windows(process.pid, dialog) if classname(child) == 'SysLink']
+                    assert links, 'About homepage must be an interactive hyperlink'
+                    found = False
+                    for link in links:
+                        text = C.create_unicode_buffer(2048)
+                        u.GetWindowTextW(link, text, len(text))
+                        if f'href="{HOMEPAGE}"' in text.value:
+                            found = True
+                    assert found, 'About hyperlink must target the project homepage'
+                    elements = accessible_elements(dialog)
+                    assert any(HOMEPAGE in item['name'] and item['focusable'] and item['enabled']
+                               for item in elements), 'Homepage must be keyboard accessible'
+                    body = '\n'.join(item['name'] for item in elements)
                 u.PostMessageW(dialog, 0x10, 0, 0)
                 until(lambda: not u.IsWindow(dialog))
                 return body
@@ -100,7 +137,8 @@ def main():
                 for other in LABELS.values():
                     if other != labels:
                         assert all(label not in current for label in other[:4])
-                body = dialog_body(ids[3])
+                assert EMPTY_INPUT[LANGUAGE[locale]] in dialog_body(current['Properties → YAML'])
+                body = dialog_body(ids[3], check_homepage=True)
                 assert labels[4] in body, (locale, body)
                 assert 'YamlProperties ' in body and 'yaml-cpp 0.8.0' in body
                 blocked_temp = config.with_name(config.name+'.tmp.'+str(process.pid))

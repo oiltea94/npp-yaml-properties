@@ -1,4 +1,6 @@
 #include <windows.h>
+#include <commctrl.h>
+#include <shellapi.h>
 #include "PluginInterface.h"
 #include "menuCmdID.h"
 #include "converter.h"
@@ -6,6 +8,7 @@
 #include "ui_text.h"
 #include <array>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -178,6 +181,12 @@ void convert(std::optional<bool> requested_direction) {
     try {
         HWND source = editor();
         auto input = read_input(source);
+        std::string_view text(input);
+        if (text.substr(0, 3) == "\xef\xbb\xbf") text.remove_prefix(3);
+        if (text.find_first_not_of(" \t\r\n\f\v") == std::string_view::npos) {
+            MessageBoxW(npp._nppHandle, ui->empty_input, plugin_name, MB_OK | MB_ICONINFORMATION);
+            return;
+        }
         bool yaml_output = requested_direction.value_or(false);
         std::string output;
         if (requested_direction) {
@@ -254,10 +263,35 @@ void toggle_sort_keys() {
     sort_keys = !sort_keys;
     SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[sort_keys_command]._cmdID, sort_keys);
 }
+constexpr wchar_t homepage[] = L"https://github.com/oiltea94/npp-yaml-properties";
+HRESULT CALLBACK about_callback(HWND window, UINT notification, WPARAM, LPARAM, LONG_PTR data) {
+    if (notification == TDN_HYPERLINK_CLICKED) {
+        // Only the fixed project URL is opened, never arbitrary notification text.
+        auto result = ShellExecuteW(window, L"open", homepage, nullptr, nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(result) <= 32) {
+            auto text = reinterpret_cast<const yp::UiText*>(data);
+            MessageBoxW(window, text->homepage_error, plugin_name, MB_OK | MB_ICONERROR);
+        }
+    }
+    return S_OK;
+}
 void about() {
     try {
-        auto text = std::wstring(L"YamlProperties " YP_VERSION_W L" (" YP_ARCH_W L")\n\n") + ui->about;
-        MessageBoxW(npp._nppHandle, text.c_str(), plugin_name, MB_OK | MB_ICONINFORMATION);
+        auto content = std::wstring(ui->about) + L"\n\n" + ui->homepage_label +
+                       L" <a href=\"" + homepage + L"\">" + homepage + L"</a>";
+        TASKDIALOGCONFIG dialog = {};
+        dialog.cbSize = sizeof(dialog);
+        dialog.hwndParent = npp._nppHandle;
+        dialog.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
+        dialog.dwCommonButtons = TDCBF_OK_BUTTON;
+        dialog.pszWindowTitle = plugin_name;
+        dialog.pszMainInstruction = L"YamlProperties " YP_VERSION_W L" (" YP_ARCH_W L")";
+        dialog.pszContent = content.c_str();
+        dialog.pfCallback = about_callback;
+        dialog.lpCallbackData = reinterpret_cast<LONG_PTR>(ui);
+        dialog.cxWidth = 420;
+        if (FAILED(TaskDialogIndirect(&dialog, nullptr, nullptr, nullptr)))
+            report("Could not open the About dialog.");
     } catch (...) { report("Could not open the About dialog."); }
 }
 }

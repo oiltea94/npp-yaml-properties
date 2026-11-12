@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Stop conversion of empty or whitespace-only editor input with a localized message, preserving the document and tabs instead of generating an empty result.
+- Add a clickable project homepage link on one line at the end of the About content, opening in the default browser.
 - Follow the Notepad++ interface language for plugin menus, configuration-save errors and About text, with live English, Simplified Chinese and Traditional Chinese switching and English fallback.
 - Update or create the official Notepad++ plugin-list PR automatically after release publication, with public asset verification and a manual dry-run/retry workflow.
 - Publish GitHub Releases automatically on version-tag pushes after all three architecture builds and package checks pass.

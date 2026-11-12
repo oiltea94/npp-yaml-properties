@@ -342,6 +342,31 @@ def main():
             assert read(sci) == before
             assert send(hwnd, 2024+60) == buffer and send(hwnd, 2024+7) == tabs
 
+        for new_tab_mode in [False, True]:
+            if new_tab_mode:
+                send(hwnd, 0x111, output_toggle)
+            for name, text, selection in [
+                (None, '', None),
+                ('empty.properties', '', None),
+                ('blank.properties', ' \t\r\n\f\n', None),
+                ('blank-selection.properties', 'keep=1\n \t\nend=2\n', (7, 10)),
+            ]:
+                if name is None:
+                    send(hwnd, 0x111, 41001)  # New, unsaved document.
+                else:
+                    open_fixture(name, text)
+                send(sci, 2160, *(selection or (0, 0)))
+                state = tuple(send(sci, message) for message in [2159, 2143, 2145, 2174])
+                for command in ['Properties → YAML', 'YAML → Properties', 'Auto-detect and convert']:
+                    expect_error(commands[command], 'No text to convert')
+                    assert tuple(send(sci, message) for message in [2159, 2143, 2145, 2174]) == state
+            passed('blank documents and selections preserve source, tabs, selection and undo state', new_tab=new_tab_mode)
+        send(hwnd, 0x111, output_toggle)  # Restore in-place mode for the remaining checks.
+        open_fixture('empty-value.properties', 'empty=\n')
+        send(hwnd, 0x111, commands['Properties → YAML'])
+        assert read(sci) == 'empty: \n'
+        passed('a property with an empty value is still converted')
+
         open_fixture('invalid.properties', 'duplicate=1\nduplicate=2\n')
         expect_error(commands['Properties → YAML'], 'Duplicate')
         assert send(sci, 2159) == 0

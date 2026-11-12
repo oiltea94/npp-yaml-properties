@@ -8,6 +8,9 @@ struct UiText {
     const wchar_t* about;
     const char* output_save_error;
     const char* sort_save_error;
+    const wchar_t* homepage_label;
+    const wchar_t* homepage_error;
+    const wchar_t* empty_input;
 };
 
 inline constexpr UiText english_ui = {
@@ -27,10 +30,12 @@ inline constexpr UiText english_ui = {
     L"Nulls, empty containers, duplicate keys and conflicting paths produce errors.\n"
     L"New tabs use UTF-8; in-place replacement preserves the document encoding.\n\n"
     L"Conversion runs locally without network requests.\n"
-    L"YAML parser: yaml-cpp 0.8.0 (MIT).\n\n"
-    L"Project homepage (GitHub):\nhttps://github.com/oiltea94/npp-yaml-properties",
+    L"YAML parser: yaml-cpp 0.8.0 (MIT).",
     "Could not save settings to the Notepad++ plugin configuration directory. The output mode was not changed.",
-    "Could not save settings to the Notepad++ plugin configuration directory. The sorting mode was not changed."
+    "Could not save settings to the Notepad++ plugin configuration directory. The sorting mode was not changed.",
+    L"Project homepage:",
+    L"Could not open the default browser. Project homepage:\nhttps://github.com/oiltea94/npp-yaml-properties",
+    L"No text to convert. Enter text or select a non-blank range."
 };
 
 inline constexpr UiText simplified_chinese_ui = {
@@ -50,10 +55,12 @@ inline constexpr UiText simplified_chinese_ui = {
     L"null、空容器、重复键和冲突路径会报错。\n"
     L"新标签页输出为 UTF-8；原位替换保持原编码。\n\n"
     L"转换在本机完成，无网络请求。\n"
-    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。\n\n"
-    L"项目主页（GitHub）：\nhttps://github.com/oiltea94/npp-yaml-properties",
+    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。",
     "未能将设置保存到 Notepad++ 插件配置目录。输出方式未更改。",
-    "未能将设置保存到 Notepad++ 插件配置目录。排序方式未更改。"
+    "未能将设置保存到 Notepad++ 插件配置目录。排序方式未更改。",
+    L"项目主页：",
+    L"未能打开默认浏览器。项目主页：\nhttps://github.com/oiltea94/npp-yaml-properties",
+    L"没有可转换的文本。请输入内容或选择非空白文本。"
 };
 
 inline constexpr UiText traditional_chinese_ui = {
@@ -73,10 +80,12 @@ inline constexpr UiText traditional_chinese_ui = {
     L"null、空容器、重複鍵和衝突路徑會報錯。\n"
     L"新分頁輸出為 UTF-8；原位取代保持原編碼。\n\n"
     L"轉換在本機完成，無網路請求。\n"
-    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。\n\n"
-    L"專案首頁（GitHub）：\nhttps://github.com/oiltea94/npp-yaml-properties",
+    L"YAML 解析器：yaml-cpp 0.8.0（MIT）。",
     "未能將設定儲存至 Notepad++ 外掛設定目錄。輸出方式未變更。",
-    "未能將設定儲存至 Notepad++ 外掛設定目錄。排序方式未變更。"
+    "未能將設定儲存至 Notepad++ 外掛設定目錄。排序方式未變更。",
+    L"專案首頁：",
+    L"未能開啟預設瀏覽器。專案首頁：\nhttps://github.com/oiltea94/npp-yaml-properties",
+    L"沒有可轉換的文字。請輸入內容或選取非空白文字。"
 };
 
 inline const UiText& ui_text(std::string native_language_file) {
