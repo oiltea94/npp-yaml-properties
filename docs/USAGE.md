@@ -2,6 +2,16 @@
 
 [返回首页](../README.md) · [从源码构建](DEVELOPMENT.md)
 
+## 界面语言
+
+插件菜单、配置保存失败提示和“关于 / 转换规则”跟随 Notepad++ 的界面语言，不需要单独设置：
+
+- 中文简体显示简体中文；台灣繁體、香港繁體显示繁体中文。
+- English 显示英文；其他语言或未加载语言文件时回退英文。
+- 在 Notepad++ 的首选项中切换语言后立即生效，无需重启，原有配置和勾选状态保持不变。
+
+下文使用简体中文菜单名；例如英文界面的输出设置为 `Open conversion result in a new tab`，排序设置为 `Sort keys during conversion`。“关于”中列出的转换规则一致，转换核心的错误诊断目前仍使用英文。
+
 ## 安装与升级
 
 下载手动安装包（按 Notepad++ 架构选择 `-x86.zip`、`-x64.zip` 或 `-arm64.zip`），关闭 Notepad++，解压并将 `YamlProperties` 文件夹复制到 Notepad++ 的 `plugins` 目录，再启动编辑器。

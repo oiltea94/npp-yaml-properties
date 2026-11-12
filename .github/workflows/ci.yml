@@ -73,6 +73,8 @@ jobs:
           "NPP_TEST_DIR=$((Resolve-Path $folder).Path)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Test real editor integration
         run: python tests/smoke_plugin.py
+      - name: Test UI localization and live language switching
+        run: python tests/i18n_plugin.py
       - name: Test installation and rollback
         run: python tests/installer_test.py
       - name: Package releases

@@ -3,6 +3,7 @@
 #include "menuCmdID.h"
 #include "converter.h"
 #include "version.h"
+#include "ui_text.h"
 #include <array>
 #include <string>
 #include <vector>
@@ -18,6 +19,32 @@ bool new_tab = true;
 bool sort_keys = false;
 std::wstring settings_path;
 unsigned output_number = 0;
+const yp::UiText* ui = &yp::english_ui;
+
+void refresh_language() {
+    // The native-language filename is available after NPPN_READY, not in setInfo.
+    auto length = SendMessageW(npp._nppHandle, NPPM_GETNATIVELANGFILENAME, 0, 0);
+    std::string filename;
+    if (length > 0 && length < 4096) {
+        std::vector<char> buffer(static_cast<std::size_t>(length) + 1, '\0');
+        SendMessageW(npp._nppHandle, NPPM_GETNATIVELANGFILENAME, buffer.size(), reinterpret_cast<LPARAM>(buffer.data()));
+        filename = buffer.data();
+    }
+    ui = &yp::ui_text(filename);
+    auto menu = reinterpret_cast<HMENU>(SendMessageW(npp._nppHandle, NPPM_GETMENUHANDLE, NPPPLUGINMENU, 0));
+    for (std::size_t i = 0; i < commands.size(); ++i) {
+        lstrcpynW(commands[i]._itemName, ui->menus[i], menuItemSize);
+        if (!commands[i]._pFunc || !menu) continue;
+        MENUITEMINFOW item = {};
+        item.cbSize = sizeof(item);
+        item.fMask = MIIM_STRING;
+        item.dwTypeData = commands[i]._itemName;
+        SetMenuItemInfoW(menu, commands[i]._cmdID, FALSE, &item);
+    }
+    SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[new_tab_command]._cmdID, new_tab);
+    SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[sort_keys_command]._cmdID, sort_keys);
+    DrawMenuBar(npp._nppHandle);
+}
 
 std::wstring wide(const std::string& text) {
     if (text.empty()) return {};
@@ -213,7 +240,7 @@ bool save_settings(bool new_tab_value, bool sort_keys_value) {
 }
 void toggle_new_tab() {
     if (!save_settings(!new_tab, sort_keys)) {
-        report("Could not save settings to the Notepad++ plugin configuration directory. The output mode was not changed.");
+        report(ui->output_save_error);
         return;
     }
     new_tab = !new_tab;
@@ -221,30 +248,17 @@ void toggle_new_tab() {
 }
 void toggle_sort_keys() {
     if (!save_settings(new_tab, !sort_keys)) {
-        report("Could not save settings to the Notepad++ plugin configuration directory. The sorting mode was not changed.");
+        report(ui->sort_save_error);
         return;
     }
     sort_keys = !sort_keys;
     SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[sort_keys_command]._cmdID, sort_keys);
 }
 void about() {
-    MessageBoxW(npp._nppHandle,
-        L"YamlProperties " YP_VERSION_W L" (" YP_ARCH_W L")\n\n"
-        L"默认在新标签页打开结果，保留原文。\n"
-        L"取消勾选后替换选区或全文，可一次撤销；设置自动记忆。\n"
-        L"点号表示层级，[0] 表示数组下标。\n\n"
-        L"可选：转换时按键名排序，默认关闭并记忆设置。\n"
-        L"开启后按每层键名升序排列，区分大小写，数组元素顺序不变。\n\n"
-        L"自动转换：优先识别扩展名，再按内容判断方向。\n"
-        L"无扩展名的 key: value 默认视为 YAML。\n"
-        L"支持带点键；logging.level 下保留完整日志名称，其余按点号展开。\n\n"
-        L"默认保留 Properties 中已有的引号，不自动添加引号。\n"
-        L"未加引号的值由 YAML 读取器识别类型。\n"
-        L"注释和原始排版不保留。\n"
-        L"null、空容器、重复键和冲突路径会报错。\n"
-        L"新标签页输出为 UTF-8；原位替换保持原编码。\n\n"
-        L"转换在本机完成，无网络请求。\n"
-        L"YAML parser: yaml-cpp 0.8.0 (MIT).", plugin_name, MB_OK | MB_ICONINFORMATION);
+    try {
+        auto text = std::wstring(L"YamlProperties " YP_VERSION_W L" (" YP_ARCH_W L")\n\n") + ui->about;
+        MessageBoxW(npp._nppHandle, text.c_str(), plugin_name, MB_OK | MB_ICONINFORMATION);
+    } catch (...) { report("Could not open the About dialog."); }
 }
 }
 
@@ -259,10 +273,9 @@ extern "C" __declspec(dllexport) void setInfo(NppData data) {
             new_tab = GetPrivateProfileIntW(L"Settings", L"NewTab", 1, settings_path.c_str()) != 0;
             sort_keys = GetPrivateProfileIntW(L"Settings", L"SortKeys", 0, settings_path.c_str()) != 0;
         }
-        const wchar_t* names[] = {L"YAML → Properties", L"Properties → YAML", L"自动识别并转换", L"在新标签页打开转换结果", L"转换时按键名排序", L"---", L"关于 / 转换规则"};
         PFUNCPLUGINCMD handlers[] = {yaml_to_properties, properties_to_yaml, auto_convert, toggle_new_tab, toggle_sort_keys, nullptr, about};
         for (std::size_t i = 0; i < commands.size(); ++i) {
-            lstrcpynW(commands[i]._itemName, names[i], menuItemSize);
+            lstrcpynW(commands[i]._itemName, ui->menus[i], menuItemSize);
             commands[i]._pFunc = handlers[i];
         }
         commands[new_tab_command]._init2Check = new_tab;
@@ -275,10 +288,9 @@ extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* count) {
     return commands.data();
 }
 extern "C" __declspec(dllexport) void beNotified(SCNotification* notification) {
-    if (notification && notification->nmhdr.code == NPPN_READY) {
-        SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[new_tab_command]._cmdID, new_tab);
-        SendMessageW(npp._nppHandle, NPPM_SETMENUITEMCHECK, commands[sort_keys_command]._cmdID, sort_keys);
-    }
+    if (notification && (notification->nmhdr.code == NPPN_READY || notification->nmhdr.code == NPPN_NATIVELANGCHANGED))
+        try { refresh_language(); }
+        catch (...) { report("Could not update the plugin interface language."); }
 }
 extern "C" __declspec(dllexport) LRESULT messageProc(UINT, WPARAM, LPARAM) { return TRUE; }
 extern "C" __declspec(dllexport) BOOL isUnicode() { return TRUE; }

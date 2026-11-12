@@ -21,6 +21,7 @@
 - **Choose what to convert**: process a selection or the entire document, and open the result in a new tab or replace the original text.
 - **Handle special keys**: supports keys such as `com.example`, Chinese characters, spaces, and escape sequences.
 - **Run locally**: native x86, x64 and ARM64 plugins; conversion requires no network connection.
+- **Follow the editor language**: menus, configuration-save messages and About switch immediately with the Notepad++ UI language. Supports English, Simplified Chinese and Traditional Chinese; other languages fall back to English.
 
 ## Example
 

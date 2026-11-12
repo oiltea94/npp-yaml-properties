@@ -28,7 +28,10 @@ def main():
     target = RUNTIME/'npp-source'
     with zipfile.ZipFile(archive) as z:
         # Only the files used by the isolated harness; no installed plugins/configuration.
-        for file in ['notepad++.exe', 'langs.model.xml', 'stylers.model.xml']:
+        for file in ['notepad++.exe', 'langs.model.xml', 'stylers.model.xml',
+                     'localization/english.xml', 'localization/chineseSimplified.xml',
+                     'localization/taiwaneseMandarin.xml', 'localization/hongKongCantonese.xml',
+                     'localization/french.xml']:
             z.extract(file, target)
     print(target)
 

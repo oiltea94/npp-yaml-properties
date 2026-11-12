@@ -148,11 +148,11 @@ def main():
                 return memory.read(length).decode(encoding)
         sci = until(lambda: next((h for h in windows(process.pid, hwnd) if classname(h) == 'Scintilla' and read(h) == initial), None))
         passed('native DLL loaded and conversion menus registered')
-        output_toggle = commands.get('在新标签页打开转换结果')
+        output_toggle = commands.get('Open conversion result in a new tab')
         assert output_toggle is not None, 'Missing configurable output menu'
         assert u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
         passed('old configuration defaults to checked new-tab output')
-        sort_toggle = commands.get('转换时按键名排序')
+        sort_toggle = commands.get('Sort keys during conversion')
         assert sort_toggle is not None and not u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
         passed('sorting defaults to off for existing configuration')
         assert '键和值始终加双引号' not in commands
@@ -197,10 +197,10 @@ def main():
         assert read(sci) == logger_properties
         passed('dotted logging keys convert without changing manual mode', output=read(sci))
         open_fixture('logging.yaml', logger_yaml)
-        send(hwnd, 0x111, commands['自动识别并转换'])
+        send(hwnd, 0x111, commands['Auto-detect and convert'])
         assert read(sci) == logger_properties
         passed('optional auto command detects YAML filename', output=read(sci))
-        send(hwnd, 0x111, commands['自动识别并转换'])
+        send(hwnd, 0x111, commands['Auto-detect and convert'])
         logger_result = read(sci).replace('\r\n', '\n')
         assert logger_result == ('logging:\n  level:\n'
                                  '    com.example: off\n'
@@ -208,18 +208,18 @@ def main():
                                  '    org.example: debug\n'), repr(logger_result)
         passed('auto command detects generated Properties tab', output=logger_result)
         open_fixture('colon.properties', 'key: value\n')
-        send(hwnd, 0x111, commands['自动识别并转换'])
+        send(hwnd, 0x111, commands['Auto-detect and convert'])
         assert read(sci) == 'key: value\n'
         passed('Properties extension resolves ambiguous colon syntax')
         original_quotes = 'logging.pattern.file="%d{HH:mm:ss} %m%n"\nprofile=\'${profileActive}\'\ncode=00123\nflag=off\n'
-        for command in ['Properties → YAML', '自动识别并转换']:
+        for command in ['Properties → YAML', 'Auto-detect and convert']:
             open_fixture('source-quotes.properties', original_quotes)
             send(hwnd, 0x111, commands[command])
             assert read(sci) == 'logging:\n  pattern:\n    file: "%d{HH:mm:ss} %m%n"\nprofile: \'${profileActive}\'\ncode: 00123\nflag: off\n'
         passed('manual and auto conversion retain existing quotes without adding new ones', output=read(sci))
         quoted_yaml = 'logging:\n  pattern:\n    file: "%d{HH:mm:ss} %m%n"\nprofile: "${profileActive}"\ncode: "00123"\nflag: off\ntext: "line\\nnext"\n'
         quoted_properties = 'logging.pattern.file="%d{HH:mm:ss} %m%n"\nprofile="${profileActive}"\ncode="00123"\nflag=off\ntext="line\\\\nnext"\n'
-        for command in ['YAML → Properties', '自动识别并转换']:
+        for command in ['YAML → Properties', 'Auto-detect and convert']:
             open_fixture('quoted-values.yaml', quoted_yaml)
             send(hwnd, 0x111, commands[command])
             assert read(sci) == quoted_properties, repr(read(sci))
@@ -233,11 +233,11 @@ def main():
         send(hwnd, 0x111, sort_toggle)
         assert u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
         assert config.read_text() == '[Settings]\nNewTab=1\nSortKeys=1\n'
-        for command in ['Properties → YAML', '自动识别并转换']:
+        for command in ['Properties → YAML', 'Auto-detect and convert']:
             open_fixture('sort.properties', unsorted_properties)
             send(hwnd, 0x111, commands[command])
             assert read(sci) == sorted_yaml, repr(read(sci))
-        for command in ['YAML → Properties', '自动识别并转换']:
+        for command in ['YAML → Properties', 'Auto-detect and convert']:
             open_fixture('sort.yaml', unsorted_yaml)
             send(hwnd, 0x111, commands[command])
             assert read(sci) == sorted_properties, repr(read(sci))
@@ -249,7 +249,7 @@ def main():
         assert config.read_text() == '[Settings]\nNewTab=1\nSortKeys=0\n'
         passed('disabling sorting restores source key order')
         open_fixture('unknown.txt', logger_yaml)
-        send(hwnd, 0x111, commands['自动识别并转换'])
+        send(hwnd, 0x111, commands['Auto-detect and convert'])
         assert read(sci) == logger_properties
         passed('auto command detects content for unknown extension')
         bad = RUNTIME / 'invalid.properties'
@@ -320,7 +320,7 @@ def main():
 
         open_fixture('inplace-auto.txt', logger_yaml)
         buffer, tabs = send(hwnd, 2024+60), send(hwnd, 2024+7)
-        send(hwnd, 0x111, commands['自动识别并转换'])
+        send(hwnd, 0x111, commands['Auto-detect and convert'])
         assert read(sci) == logger_properties
         assert send(hwnd, 2024+60) == buffer and send(hwnd, 2024+7) == tabs
         passed('automatic conversion respects in-place output')
@@ -401,20 +401,20 @@ def main():
         process = subprocess.Popen([str(RUNTIME / 'notepad++.exe'), '-multiInst', '-nosession', '-noUpdater', str(fixture)], cwd=RUNTIME, startupinfo=startup)
         hwnd = until(lambda: next((h for h in windows(process.pid) if classname(h) == 'Notepad++'), None))
         u.ShowWindow(hwnd, 0)
-        commands = until(lambda: (m if '在新标签页打开转换结果' in m else None) if (m := menus(u.GetMenu(hwnd))) else None)
+        commands = until(lambda: (m if 'Open conversion result in a new tab' in m else None) if (m := menus(u.GetMenu(hwnd))) else None)
         handle = k.OpenProcess(0x0038 | 0x0400, False, process.pid)
         if not handle:
             raise C.WinError(C.get_last_error())
         sci = until(lambda: next((h for h in windows(process.pid, hwnd) if classname(h) == 'Scintilla' and read(h) == initial), None))
-        output_toggle = commands['在新标签页打开转换结果']
-        sort_toggle = commands['转换时按键名排序']
+        output_toggle = commands['Open conversion result in a new tab']
+        sort_toggle = commands['Sort keys during conversion']
         assert u.GetMenuState(u.GetMenu(hwnd), sort_toggle, 0) & 8
         assert '保留完整键名（不拆分点号和下标）' not in commands
         assert '键和值始终加双引号' not in commands
         assert not u.GetMenuState(u.GetMenu(hwnd), output_toggle, 0) & 8
         open_fixture('restart.properties', 'z.b=2\na.b=1\n')
         buffer, tabs = send(hwnd, 2024+60), send(hwnd, 2024+7)
-        send(hwnd, 0x111, commands['自动识别并转换'])
+        send(hwnd, 0x111, commands['Auto-detect and convert'])
         assert read(sci) == 'a:\n  b: 1\nz:\n  b: 2\n'
         assert send(hwnd, 2024+60) == buffer and send(hwnd, 2024+7) == tabs
         send(sci, 2176)
